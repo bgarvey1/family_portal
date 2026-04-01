@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+setup-vars.env
+service-account.json
+
+# Build output
+dist/
+build/
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Vite cache
+.vite/
+
+# Claude settings
+.claude/

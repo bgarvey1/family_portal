@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Family Hub — Project Overview</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --amber:       #B8760A;
+    --amber-light: #F2DFA8;
+    --amber-border:#DCBB6A;
+    --brown:       #4A2E0E;
+    --soft:        #7A5535;
+    --muted:       #A0845C;
+    --cream:       #FDF8F0;
+    --warm:        #F7EDD5;
+    --green:       #2E7D52;
+    --blue:        #1A5A8A;
+    --purple:      #5B3FA6;
+    --red:         #9B2020;
+    --text:        #1A1208;
+    --shadow:      rgba(74,46,14,0.08);
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--cream);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Cover ── */
+  .cover {
+    background: var(--brown);
+    color: #FDF8F0;
+    padding: 72px 60px 56px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    background: rgba(184,118,10,0.15);
+    pointer-events: none;
+  }
+  .cover::after {
+    content: '';
+    position: absolute;
+    bottom: -60px; left: 40px;
+    width: 260px; height: 260px;
+    border-radius: 50%;
+    background: rgba(184,118,10,0.08);
+    pointer-events: none;
+  }
+  .cover-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--amber-border);
+    margin-bottom: 20px;
+  }
+  .cover-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 52px;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 12px;
+    color: #FDF8F0;
+  }
+  .cover-subtitle {
+    font-size: 18px;
+    font-weight: 300;
+    color: rgba(253,248,240,0.75);
+    max-width: 600px;
+    line-height: 1.6;
+    margin-bottom: 40px;
+  }
+  .cover-meta {
+    display: flex;
+    gap: 32px;
+    font-size: 13px;
+    color: rgba(253,248,240,0.55);
+    border-top: 1px solid rgba(253,248,240,0.12);
+    padding-top: 24px;
+  }
+  .cover-meta span { font-weight: 500; color: rgba(253,248,240,0.85); }
+
+  /* ── Layout ── */
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 40px 80px;
+  }
+
+  /* ── Sections ── */
+  section {
+    margin-top: 56px;
+  }
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 8px;
+  }
+  h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--brown);
+    margin-bottom: 18px;
+    line-height: 1.25;
+  }
+  h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--brown);
+    margin: 24px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  p { margin-bottom: 14px; color: #2A1A06; }
+  p:last-child { margin-bottom: 0; }
+
+  /* ── Divider ── */
+  hr {
+    border: none;
+    border-top: 1px solid var(--amber-border);
+    opacity: 0.4;
+    margin: 48px 0 0;
+  }
+
+  /* ── Callout ── */
+  .callout {
+    background: var(--warm);
+    border-left: 4px solid var(--amber);
+    border-radius: 0 12px 12px 0;
+    padding: 18px 22px;
+    margin: 24px 0;
+    font-size: 15px;
+    color: var(--soft);
+    line-height: 1.7;
+  }
+  .callout strong { color: var(--brown); }
+
+  /* ── Architecture diagram ── */
+  .arch {
+    background: #FFF;
+    border: 1.5px solid var(--amber-border);
+    border-radius: 16px;
+    padding: 28px 28px 24px;
+    margin: 24px 0;
+    box-shadow: 0 2px 12px var(--shadow);
+  }
+  .arch-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .arch-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .arch-box {
+    background: var(--warm);
+    border: 1.5px solid var(--amber-border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--brown);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .arch-box.highlight {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: #FFF;
+  }
+  .arch-box.dim {
+    background: #F7F3EC;
+    border-color: #E0D5C0;
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .arch-arrow {
+    font-size: 16px;
+    color: var(--amber-border);
+    flex-shrink: 0;
+  }
+  .arch-note {
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+    flex-shrink: 0;
+  }
+  .arch-divider {
+    border: none;
+    border-top: 1px dashed var(--amber-border);
+    margin: 16px 0;
+    opacity: 0.5;
+  }
+
+  /* ── Pill tags ── */
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1.5px solid;
+  }
+  .tag.amber  { background: var(--amber-light); border-color: var(--amber-border); color: var(--soft); }
+  .tag.green  { background: #E8F5EE; border-color: #A5D6BC; color: var(--green); }
+  .tag.blue   { background: #E6F0F8; border-color: #A8C8E8; color: var(--blue); }
+  .tag.purple { background: #EDE8F8; border-color: #C0AEED; color: var(--purple); }
+  .tag.red    { background: #FBE8E8; border-color: #E8AAAA; color: var(--red); }
+
+  /* ── Code block ── */
+  pre {
+    background: #1C1208;
+    border-radius: 12px;
+    padding: 20px 22px;
+    overflow-x: auto;
+    margin: 20px 0;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.8;
+    color: #F2DFA8;
+  }
+  .cm { color: #7A9A7A; }  /* comment */
+  .ck { color: #C3A6FF; }  /* keyword */
+  .cs { color: #F9C74F; }  /* string */
+  .cp { color: #90E0EF; }  /* property */
+  .cv { color: #F4A261; }  /* value */
+
+  /* ── Data flow ── */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 20px 0;
+  }
+  .flow-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(220,187,106,0.2);
+  }
+  .flow-step:last-child { border-bottom: none; }
+  .flow-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--amber);
+    color: #FFF;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .flow-content { flex: 1; }
+  .flow-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--brown);
+    margin-bottom: 3px;
+  }
+  .flow-desc { font-size: 13px; color: var(--soft); line-height: 1.6; }
+  .flow-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--warm);
+    border: 1px solid var(--amber-border);
+    border-radius: 6px;
+    padding: 2px 8px;
+    color: var(--amber);
+    margin-top: 5px;
+    display: inline-block;
+  }
+
+  /* ── Columns ── */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  .col-card {
+    background: #FFF;
+    border: 1.5px solid var(--amber-border);
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 1px 6px var(--shadow);
+  }
+  .col-card-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--amber);
+    margin-bottom: 10px;
+  }
+  .col-card ul {
+    list-style: none;
+    font-size: 13px;
+    color: var(--soft);
+    line-height: 1.9;
+  }
+  .col-card ul li::before { content: "→ "; color: var(--amber-border); font-weight: 600; }
+
+  /* ── Status table ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    margin: 20px 0;
+  }
+  th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 8px 14px;
+    border-bottom: 2px solid var(--amber-border);
+  }
+  td {
+    padding: 11px 14px;
+    border-bottom: 1px solid rgba(220,187,106,0.25);
+    color: #2A1A06;
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--warm); }
+  .status-done    { color: var(--green);  font-weight: 600; }
+  .status-next    { color: var(--blue);   font-weight: 600; }
+  .status-later   { color: var(--muted);  font-weight: 500; }
+
+  /* ── Footer ── */
+  .footer {
+    background: var(--warm);
+    border-top: 2px solid var(--amber-border);
+    padding: 28px 40px;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 60px;
+  }
+  .footer strong { color: var(--soft); }
+
+  @media (max-width: 680px) {
+    .cover { padding: 48px 28px 40px; }
+    .cover-title { font-size: 36px; }
+    .container { padding: 0 20px 60px; }
+    .cols { grid-template-columns: 1fr; }
+    .cover-meta { flex-direction: column; gap: 10px; }
+    .footer { flex-direction: column; gap: 8px; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Cover ── -->
+<div class="cover">
+  <div class="container" style="padding-bottom:0">
+    <div class="cover-eyebrow">Personal Project — Design Proposal</div>
+    <div class="cover-title">Family Hub</div>
+    <div class="cover-subtitle">An AI-powered family memory portal — built to keep grandparents connected to the people they love, without needing any technical skill to use it.</div>
+    <div class="cover-meta">
+      <div>Status <span>Working prototype</span></div>
+      <div>Stack <span>React · Node.js · Cloud Run · Firestore · Drive API · Claude API</span></div>
+      <div>Date <span>March 2026</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ── 1. The Problem ── -->
+  <section>
+    <div class="section-label">01 — Motivation</div>
+    <h2>The problem it solves</h2>
+    <p>Grandparents want to stay close to their grandkids' lives. But they're often left out of the informal, high-bandwidth family communication that happens over text threads, Instagram, and group chats. The information exists — it's just scattered, inaccessible to someone who isn't in those channels, and hard to query.</p>
+    <p>Meanwhile, kids and parents don't want to manage yet another communication platform. They want to keep using what they already use — their phones, Google Drive, iMessage.</p>
+    <div class="callout">
+      <strong>The core insight:</strong> the problem isn't that grandparents lack access to family information — it's that no agent sits on top of that information and makes it conversationally accessible. A well-designed AI layer can bridge this gap without requiring anyone to change their behavior.
+    </div>
+    <p>The secondary insight is that elderly users actually benefit more from a chat interface than younger users do. Natural language is more accessible than navigation, menus, and feeds. "What is Justin up to?" is a much lower barrier than scrolling through a photo grid.</p>
+  </section>
+
+  <hr>
+
+  <!-- ── 2. What It Does ── -->
+  <section>
+    <div class="section-label">02 — Product</div>
+    <h2>What it does</h2>
+
+    <div class="cols">
+      <div class="col-card">
+        <div class="col-card-title">👴 For grandparents</div>
+        <ul>
+          <li>Large-text chat interface</li>
+          <li>Ask anything about the family</li>
+          <li>See shared photos inline</li>
+          <li>Live weather at the family's home</li>
+          <li>Weekly family podcast — press Play</li>
+          <li>No accounts, no navigation</li>
+        </ul>
+      </div>
+      <div class="col-card">
+        <div class="col-card-title">👨‍👩‍👧 For family contributors</div>
+        <ul>
+          <li>PIN-gated contributor portal</li>
+          <li>Add photos, notes, events, links</li>
+          <li>Drop media in Google Drive</li>
+          <li>AI classifies everything automatically</li>
+          <li>Admin can generate weekly podcast</li>
+          <li>Full vault management</li>
+        </ul>
+      </div>
+    </div>
+
+    <p>The grandparent experience is deliberately minimal — one screen, giant text, a text box, and a send button. Everything else is handled by the AI or by family members behind the scenes.</p>
+  </section>
+
+  <hr>
+
+  <!-- ── 3. Architecture ── -->
+  <section>
+    <div class="section-label">03 — System Design</div>
+    <h2>Architecture</h2>
+    <p>The system has three distinct layers that each do one job well.</p>
+
+    <div class="arch">
+      <div class="arch-title">System layers</div>
+
+      <div class="arch-row">
+        <div class="arch-box">👨‍👩‍👧 Google Drive</div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-note">Raw storage — family drops files here from phones</div>
+      </div>
+      <div class="arch-row" style="padding-left:28px">
+        <div class="arch-arrow">↓</div>
+        <div class="arch-note" style="font-style:normal;font-size:12px;color:var(--amber)">Cloud Scheduler polls every N min → POST /api/sync</div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-box highlight">☁️ Cloud Run (Node)</div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-note">Download → Claude Vision → manifest JSON → Firestore</div>
+      </div>
+      <div class="arch-row" style="padding-left:28px">
+        <div class="arch-arrow">↓</div>
+        <div class="arch-note" style="font-style:normal;font-size:12px;color:var(--amber)">REST API: /api/manifests, /api/raw/:id</div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-box">🗄️ Firestore</div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-note">vault_manifests collection — lightweight, queryable</div>
+      </div>
+
+      <div class="arch-divider"/>
+
+      <div class="arch-row">
+        <div class="arch-box">⚛️ React Artifact</div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-note">Calls backend API + direct Anthropic API</div>
+      </div>
+      <div class="arch-row" style="padding-left:28px">
+        <div class="arch-arrow">↓</div>
+        <div class="arch-note" style="font-style:normal;font-size:12px;color:var(--amber)">Two-pass RAG on every chat message</div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-box dim">👴 Grandparent</div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-note">Just types a question. Sees a warm, grounded answer.</div>
+      </div>
+    </div>
+
+    <h3>The retrieval pattern (RAG)</h3>
+    <p>The most important design decision is how the agent accesses the vault. Naively injecting all vault content into every prompt doesn't scale — after a few dozen items the context window fills and quality degrades. Instead the system uses a two-pass retrieval pattern:</p>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-content">
+          <div class="flow-title">Index read — Pass 1</div>
+          <div class="flow-desc">Load the full manifest index from Firestore. Each manifest is a single compact line: ID, type, subjects, topics, description, mood, date. Even 500 items is only ~15KB — always fast, always fits in context.</div>
+          <div class="flow-code">GET /api/manifests → [ { id, subjects, topics, description, ... } ]</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-content">
+          <div class="flow-title">Relevance selection — Pass 1 continued</div>
+          <div class="flow-desc">Send the question + full index to Claude. Ask it to return only the IDs of relevant items (max 5). This is a cheap, fast call — the model is routing, not generating.</div>
+          <div class="flow-code">Claude: ["a4f91b", "e1b88c"] ← selected IDs</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-content">
+          <div class="flow-title">Raw content fetch — Pass 2 setup</div>
+          <div class="flow-desc">Fetch only the raw content for selected IDs. For photos, this returns a compressed JPEG thumbnail (≤200KB). For documents, the text excerpt. For links, the URL and metadata.</div>
+          <div class="flow-code">GET /api/raw/:id → { thumbnailDataUri, webViewLink, ... }</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">4</div>
+        <div class="flow-content">
+          <div class="flow-title">Grounded response — Pass 2</div>
+          <div class="flow-desc">Build the final prompt: family context + retrieved vault items + photos as vision blocks. Claude generates a warm, specific, grounded response. Photos show inline below the message.</div>
+          <div class="flow-code">System prompt + retrieved items + [image blocks if photos] → response</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>The classifier</h3>
+    <p>Every item that enters the vault gets classified exactly once — at upload time. For photos, Claude Vision analyzes the actual image. For documents, it reads the text. The output is a structured manifest:</p>
+
+    <pre><code><span class="cm">// Example manifest — generated by Claude Vision from a photo</span>
+{
+  <span class="cp">"id"</span>:          <span class="cs">"a4f91b"</span>,
+  <span class="cp">"type"</span>:        <span class="cs">"photo"</span>,
+  <span class="cp">"title"</span>:       <span class="cs">"Justin Hockey Tournament"</span>,
+  <span class="cp">"contributor"</span>: <span class="cs">"Brendan"</span>,
+  <span class="cp">"date"</span>:        <span class="cs">"2019-03-14"</span>,
+  <span class="cm">// ↑ lightweight fields — always loaded</span>
+
+  <span class="cp">"subjects"</span>:    [<span class="cs">"Justin"</span>],
+  <span class="cp">"topics"</span>:      [<span class="cs">"hockey"</span>, <span class="cs">"sports"</span>, <span class="cs">"tournament"</span>, <span class="cs">"childhood"</span>],
+  <span class="cp">"description"</span>: <span class="cs">"Justin in full hockey gear celebrating after scoring
+               a goal at Milton Academy rink, age 9, huge smile"</span>,
+  <span class="cp">"mood"</span>:        <span class="cs">"joyful"</span>,
+  <span class="cp">"tags"</span>:        [<span class="cs">"milestone"</span>, <span class="cs">"childhood"</span>, <span class="cs">"sports"</span>, <span class="cs">"photo"</span>],
+  <span class="cm">// ↑ classifier output — semantic search surface</span>
+
+  <span class="cp">"rawRef"</span>: {
+    <span class="cp">"driveFileId"</span>:      <span class="cs">"1BxiM..."</span>,
+    <span class="cp">"thumbnailDataUri"</span>: <span class="cs">"data:image/jpeg;base64,..."</span>
+    <span class="cm">// ↑ raw content — only fetched when selected</span>
+  }
+}</code></pre>
+
+    <p>The key architectural principle: the manifest is cheap to scan (a line of text), but rich enough for the model to make good retrieval decisions. The raw content is never touched unless the manifest is selected. This means the vault can grow to hundreds of items — years of family history — without any degradation in response speed or quality.</p>
+  </section>
+
+  <hr>
+
+  <!-- ── 4. Tech Stack ── -->
+  <section>
+    <div class="section-label">04 — Stack</div>
+    <h2>Technology choices</h2>
+
+    <div class="tags">
+      <span class="tag amber">React (JSX artifact)</span>
+      <span class="tag amber">Claude Sonnet API</span>
+      <span class="tag blue">Node.js + Express</span>
+      <span class="tag blue">Google Cloud Run</span>
+      <span class="tag blue">Cloud Scheduler</span>
+      <span class="tag green">Firestore</span>
+      <span class="tag green">Google Drive API</span>
+      <span class="tag purple">Claude Vision</span>
+      <span class="tag purple">Web Speech API</span>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Component</th><th>Choice</th><th>Why</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Frontend</td><td>React artifact (claude.ai)</td><td>Zero hosting — runs inside the Claude.ai interface. Persistent storage via built-in storage API.</td></tr>
+        <tr><td>Backend</td><td>Node.js + Express on Cloud Run</td><td>Serverless, scales to zero when idle, ~$0/month at family-scale usage.</td></tr>
+        <tr><td>Database</td><td>Firestore</td><td>Natural fit with Drive/GCP ecosystem. Free tier handles this workload indefinitely. Schemaless is fine for manifests.</td></tr>
+        <tr><td>Storage</td><td>Google Drive</td><td>Family already uses it. Zero onboarding for contributors. Native mobile apps on every platform.</td></tr>
+        <tr><td>AI model</td><td>Claude Sonnet</td><td>Best vision + text quality at the latency and cost target. Handles all three roles: classifier, retrieval router, response generator.</td></tr>
+        <tr><td>Podcast TTS</td><td>Web Speech API</td><td>Zero cost, no API key, works everywhere. Not broadcast quality, but perfectly warm at normal listening volume.</td></tr>
+        <tr><td>Weather</td><td>Open-Meteo API</td><td>Free, no key required, accurate, simple REST interface.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <hr>
+
+  <!-- ── 5. Build Status ── -->
+  <section>
+    <div class="section-label">05 — Build Status</div>
+    <h2>What's built, what's next</h2>
+
+    <table>
+      <thead>
+        <tr><th>Feature</th><th>Status</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Parent-facing chat UI</td><td class="status-done">✓ Done</td><td>Large text, warm design, two-pass RAG, source attribution pills, inline photos</td></tr>
+        <tr><td>Contributor portal</td><td class="status-done">✓ Done</td><td>Separate PIN, photo/note/link/event types, AI classification preview on upload</td></tr>
+        <tr><td>AI classifier (at upload)</td><td class="status-done">✓ Done</td><td>Claude Vision for photos, text analysis for docs, graceful fallback</td></tr>
+        <tr><td>Two-pass RAG retrieval</td><td class="status-done">✓ Done</td><td>Index-first → ID selection → raw fetch → grounded response</td></tr>
+        <tr><td>Photo gallery + inline display</td><td class="status-done">✓ Done</td><td>Photos render in gallery tab and inline below relevant AI responses</td></tr>
+        <tr><td>Live weather card</td><td class="status-done">✓ Done</td><td>Open-Meteo API, geocoded by city name, persists across sessions</td></tr>
+        <tr><td>Weekly podcast generation</td><td class="status-done">✓ Done</td><td>Claude writes warm 2-min script from vault + context; Web Speech API reads it aloud</td></tr>
+        <tr><td>Persistent storage</td><td class="status-done">✓ Done</td><td>Manifests in Firestore (backend mode) or built-in storage (local mode)</td></tr>
+        <tr><td>Cloud Run backend</td><td class="status-done">✓ Done</td><td>All routes built; Dockerfile ready; deploy guide written</td></tr>
+        <tr><td>Drive polling + sync</td><td class="status-done">✓ Done</td><td>Cloud Scheduler → /api/sync → Drive API → classifier → Firestore</td></tr>
+        <tr><td>Deploy to Cloud Run</td><td class="status-next">⟳ Next</td><td>Code is ready; waiting on GCP setup (gcloud install + auth)</td></tr>
+        <tr><td>Drive webhook (push)</td><td class="status-later">Later</td><td>Replace polling with Drive push notifications for real-time sync</td></tr>
+        <tr><td>Voice input</td><td class="status-later">Later</td><td>Web Speech API already available; adds ~20 lines to the chat component</td></tr>
+        <tr><td>Audio/video transcription</td><td class="status-later">Later</td><td>Whisper API transcribes voice memos → text → classifier pipeline as-is</td></tr>
+        <tr><td>Mobile-native contributor app</td><td class="status-later">Later</td><td>React Native or PWA for frictionless phone uploads directly to Drive</td></tr>
+        <tr><td>Multi-family-member accounts</td><td class="status-later">Later</td><td>Auth layer (Firebase Auth) + per-user contributor profiles</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <hr>
+
+  <!-- ── 6. Design Principles ── -->
+  <section>
+    <div class="section-label">06 — Design Philosophy</div>
+    <h2>A few principles worth preserving</h2>
+
+    <h3>Zero behavior change for contributors</h3>
+    <p>The system is designed so that contributors — the kids, your wife — don't have to do anything differently. They use Google Drive like they might already. The backend does all the work of noticing, downloading, classifying, and indexing. The only ask is an occasional note when dropping in a video, because the AI can't watch video files yet.</p>
+
+    <h3>The agent stays grounded</h3>
+    <p>The system prompt is strict: answer only from the provided family context and vault items, never invent. This matters a lot for elderly users who might not know to question a confabulated answer. The source attribution pills (small amber tags under every AI response) show exactly which vault items the answer drew from — useful for building trust and debugging.</p>
+
+    <h3>Scale without degradation</h3>
+    <p>The index-first retrieval pattern means quality doesn't degrade as the vault grows. Adding a photo from 10 years ago doesn't make current responses worse. The classifier's rich descriptions are the mechanism — they have to be good enough that a future model can select the right item from a 500-item index based on a question it's never seen.</p>
+
+    <h3>Local mode as a real fallback</h3>
+    <p>The frontend runs fully in local storage mode with no backend at all. This was an intentional design choice — it makes iteration fast (no deploy cycle) and means the app can be demonstrated without any infrastructure. The <code>BACKEND_URL</code> and <code>BACKEND_KEY</code> constants at the top of the file are the only thing separating the two modes.</p>
+  </section>
+
+  <hr>
+
+  <!-- ── 7. Repo Map ── -->
+  <section>
+    <div class="section-label">07 — Code</div>
+    <h2>Repository structure</h2>
+
+    <pre><code>familyhub-backend/
+<span class="cm">├── server.js           Express app — all REST routes</span>
+<span class="cm">├── Dockerfile          Cloud Run container</span>
+<span class="cm">├── .env.example        All required env vars documented</span>
+<span class="cm">├── SETUP.md            Full deploy walkthrough</span>
+<span class="cm">└── lib/</span>
+<span class="cm">    ├── sync.js         Orchestrator — Drive poll → classify → Firestore</span>
+<span class="cm">    ├── classifier.js   Claude Vision/text → manifest JSON</span>
+<span class="cm">    ├── drive.js        Drive API client — list, download, resize</span>
+<span class="cm">    └── firestore.js    Manifest CRUD + sync cursor</span>
+
+FamilyHub.jsx           React artifact — all frontend
+<span class="cm">                        ├── ParentView    — grandparent chat + gallery + podcast</span>
+<span class="cm">                        ├── ContribView   — family contributor portal</span>
+<span class="cm">                        ├── AdminView     — context, vault, podcast, settings</span>
+<span class="cm">                        ├── classifyItem  — local classifier (demo mode)</span>
+<span class="cm">                        ├── selectRelevantItems  — RAG pass 1</span>
+<span class="cm">                        └── api.*         — backend client (live mode)</span></code></pre>
+  </section>
+
+  <hr>
+
+  <!-- ── 8. Immediate Next Steps ── -->
+  <section>
+    <div class="section-label">08 — What's needed</div>
+    <h2>To get to a live demo</h2>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-content">
+          <div class="flow-title">Install gcloud CLI + Node</div>
+          <div class="flow-desc">Both available via Homebrew. One browser auth step, then everything runs from terminal. Claude Code can handle the rest of the GCP setup via CLI with no console required.</div>
+          <div class="flow-code">brew install --cask google-cloud-sdk && gcloud auth login</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-content">
+          <div class="flow-title">GCP project setup</div>
+          <div class="flow-desc">Enable 5 APIs, create Firestore database, create service account, share the Drive folder. All scriptable — SETUP.md has the exact commands. ~15 minutes.</div>
+          <div class="flow-code">gcloud services enable run.googleapis.com firestore.googleapis.com ...</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-content">
+          <div class="flow-title">Deploy and wire up</div>
+          <div class="flow-desc">gcloud builds submit + gcloud run deploy. Get the service URL. Paste it into the two constants at the top of FamilyHub.jsx. Done.</div>
+          <div class="flow-code">const BACKEND_URL = 'https://familyhub-backend-xxxx.a.run.app';</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">4</div>
+        <div class="flow-content">
+          <div class="flow-title">Populate and test</div>
+          <div class="flow-desc">Fill in the family context in the Admin tab. Drop a few photos in the Drive folder. Hit Sync Now. Ask the grandparent chat "show me a recent photo." If it retrieves and displays the right image — it works.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ── Footer ── -->
+<div class="footer">
+  <div><strong>Family Hub</strong> — Personal project, March 2026</div>
+  <div>Built with Claude · React · Google Cloud · Open-Meteo</div>
+</div>
+
+</body>
+</html>
