@@ -994,6 +994,57 @@ const VaultView = ({ manifests, onPhotoClick, onRefresh }) => {
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleUpload = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    setUploadStatus(null);
+    const results = [];
+
+    for (const file of files) {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("contributor", "Brendan"); // TODO: make configurable
+
+        const r = await fetch(`${BACKEND_URL}/api/upload`, {
+          method: "POST",
+          headers: { "x-api-key": BACKEND_KEY },
+          body: formData,
+        });
+
+        if (!r.ok) {
+          const err = await r.json();
+          results.push({ name: file.name, ok: false, error: err.error });
+        } else {
+          const data = await r.json();
+          results.push({ name: file.name, ok: true, title: data.title });
+        }
+      } catch (err) {
+        results.push({ name: file.name, ok: false, error: err.message });
+      }
+    }
+
+    const succeeded = results.filter((r) => r.ok).length;
+    const failed = results.filter((r) => !r.ok).length;
+    setUploadStatus({
+      ok: failed === 0,
+      msg: `${succeeded} photo${succeeded !== 1 ? "s" : ""} uploaded${failed > 0 ? `, ${failed} failed` : ""}`,
+      details: results,
+    });
+    setUploading(false);
+
+    // Clear the file input so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
+    // Refresh the manifest list
+    if (succeeded > 0 && onRefresh) onRefresh();
+  };
 
   const filtered = manifests.filter((m) => {
     const cl = m.classification || {};
@@ -1011,7 +1062,37 @@ const VaultView = ({ manifests, onPhotoClick, onRefresh }) => {
 
   return (
     <div style={{ padding: 24 }}>
+      {/* Upload + Search bar */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16, alignItems: "center" }}>
+        {/* Upload button */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={handleUpload}
+          style={{ display: "none" }}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          style={{
+            padding: "8px 20px",
+            borderRadius: 10,
+            border: "none",
+            background: uploading ? C.warmBorder : C.amber,
+            color: C.white,
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: uploading ? "default" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          {uploading ? "Uploading..." : "+ Add Photos"}
+        </button>
+
         <input
           type="text"
           placeholder="Search vault..."
@@ -1026,8 +1107,45 @@ const VaultView = ({ manifests, onPhotoClick, onRefresh }) => {
             fontSize: 14,
             outline: "none",
             minWidth: 200,
+            flex: 1,
           }}
         />
+      </div>
+
+      {/* Upload status */}
+      {uploadStatus && (
+        <div
+          style={{
+            padding: "10px 16px",
+            borderRadius: 10,
+            marginBottom: 12,
+            background: uploadStatus.ok ? C.greenBg : C.redBg,
+            color: uploadStatus.ok ? C.green : C.red,
+            fontSize: 14,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <span>{uploadStatus.msg}</span>
+          <button
+            onClick={() => setUploadStatus(null)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "inherit",
+              fontSize: 16,
+              cursor: "pointer",
+              padding: "0 4px",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Category filters */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16, alignItems: "center" }}>
         {CATEGORIES.map((c) => (
           <button
             key={c}
