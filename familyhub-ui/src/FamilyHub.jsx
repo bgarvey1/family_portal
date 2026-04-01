@@ -5,13 +5,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // In local dev (Vite proxy), leave BACKEND_URL empty so requests go to /api/*
 // In production (Cloud Run), set the full URL.
 const CLOUD_BACKEND_URL = "https://familyhub-backend-761807984124.us-east1.run.app";
-const BACKEND_KEY = "YOUR_BACKEND_KEY";
-// Anthropic API — used client-side for two-pass RAG chat
-const ANTHROPIC_KEY = "YOUR_ANTHROPIC_API_KEY";
+const BACKEND_KEY = "82499e764781230d465dc768064fb155b821f510ee1fad6db71938f7ea59182f";
 
-// Auto-detect: if running on localhost, use Vite proxy (empty base); otherwise use Cloud Run URL
+// Auto-detect: if running on localhost with a local backend, use Vite proxy (empty base);
+// otherwise use Cloud Run URL directly.
 const IS_LOCAL = typeof window !== "undefined" && window.location.hostname === "localhost";
-const BACKEND_URL = IS_LOCAL ? "" : CLOUD_BACKEND_URL;
+const BACKEND_URL = CLOUD_BACKEND_URL;
 
 // ── Demo data (used when backend is unreachable) ────────────────────────────
 const DEMO_MANIFESTS = [
@@ -85,27 +84,17 @@ const thumbUrl = (driveFileId) =>
     : null;
 
 const claudeChat = async (messages, system) => {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+  const r = await apiFetch("/api/chat", {
     method: "POST",
-    headers: {
-      "x-api-key": ANTHROPIC_KEY,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 1024,
-      system,
-      messages,
-    }),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ messages, system }),
   });
   if (!r.ok) {
     const err = await r.text();
-    throw new Error(`Claude API ${r.status}: ${err}`);
+    throw new Error(`Chat API ${r.status}: ${err}`);
   }
   const data = await r.json();
-  return data.content?.[0]?.text || "";
+  return data.text || "";
 };
 
 // ── Two-pass RAG ─────────────────────────────────────────────────────────────
@@ -416,8 +405,262 @@ const ChatMessage = ({ msg, onPhotoClick }) => {
   );
 };
 
+// ── Edit Panel (corrections UI) ─────────────────────────────────────────────
+const EditPanel = ({ item, onSave, onReclassify, onClose }) => {
+  const cl = item.classification || {};
+  const existing = item.corrections || {};
+  const [people, setPeople] = useState(
+    (existing.people || cl.people || []).join(", ")
+  );
+  const [location, setLocation] = useState(
+    existing.location || cl.location || ""
+  );
+  const [context, setContext] = useState(existing.context || "");
+  const [tags, setTags] = useState(
+    (existing.tags || cl.tags || []).join(", ")
+  );
+  const [saving, setSaving] = useState(false);
+  const [reclassifying, setReclassifying] = useState(false);
+  const [status, setStatus] = useState(null);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setStatus(null);
+    try {
+      const body = {};
+      if (people.trim()) body.people = people.split(",").map((s) => s.trim()).filter(Boolean);
+      if (location.trim()) body.location = location.trim();
+      if (context.trim()) body.context = context.trim();
+      if (tags.trim()) body.tags = tags.split(",").map((s) => s.trim()).filter(Boolean);
+
+      const r = await apiFetch(`/api/manifests/${item.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const learned = data.knowledgeLearned?.length || 0;
+      setStatus({ ok: true, msg: `Saved! ${learned > 0 ? `Learned ${learned} new fact${learned > 1 ? "s" : ""}.` : ""}` });
+      if (onSave) onSave();
+    } catch (err) {
+      setStatus({ ok: false, msg: err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReclassify = async () => {
+    setReclassifying(true);
+    setStatus(null);
+    try {
+      const r = await apiFetch(`/api/manifests/${item.id}/reclassify`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setStatus({ ok: true, msg: "Re-classified with latest knowledge!" });
+      if (onReclassify) onReclassify();
+    } catch (err) {
+      setStatus({ ok: false, msg: err.message });
+    } finally {
+      setReclassifying(false);
+    }
+  };
+
+  const fieldStyle = {
+    width: "100%",
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: `1.5px solid ${C.amberBorder}`,
+    background: C.cream,
+    color: C.text,
+    fontSize: 14,
+    fontFamily: "inherit",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
+  const labelStyle = {
+    fontSize: 12,
+    fontWeight: 600,
+    color: C.soft,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    marginBottom: 4,
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9998,
+        display: "flex",
+        justifyContent: "flex-end",
+      }}
+    >
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }}
+      />
+      {/* Panel */}
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth: 440,
+          background: C.white,
+          overflowY: "auto",
+          padding: 24,
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+          boxShadow: "-4px 0 24px rgba(0,0,0,0.15)",
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: C.brown }}>Edit Details</div>
+          <button
+            onClick={onClose}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              border: "none",
+              background: C.warm,
+              color: C.soft,
+              fontSize: 18,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Current title */}
+        <div style={{ fontSize: 14, color: C.lightText, padding: "8px 12px", background: C.warm, borderRadius: 8 }}>
+          {cl.title || item.fileName}
+        </div>
+
+        {/* People */}
+        <div>
+          <div style={labelStyle}>People (comma-separated)</div>
+          <input
+            type="text"
+            value={people}
+            onChange={(e) => setPeople(e.target.value)}
+            placeholder='e.g. Ryan (blue jacket), Justin (orange jacket)'
+            style={fieldStyle}
+          />
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+            Tip: Add descriptions like "Ryan (blue jacket)" to teach the system
+          </div>
+        </div>
+
+        {/* Location */}
+        <div>
+          <div style={labelStyle}>Location</div>
+          <input
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="e.g. Buffalo Pass, near Steamboat Springs, CO"
+            style={fieldStyle}
+          />
+        </div>
+
+        {/* Context */}
+        <div>
+          <div style={labelStyle}>Context / Notes</div>
+          <textarea
+            value={context}
+            onChange={(e) => setContext(e.target.value)}
+            placeholder="e.g. Annual cat skiing trip with the boys, January 2024"
+            rows={3}
+            style={{ ...fieldStyle, resize: "vertical" }}
+          />
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+            This becomes family knowledge — future photos will be classified smarter
+          </div>
+        </div>
+
+        {/* Tags */}
+        <div>
+          <div style={labelStyle}>Tags (comma-separated)</div>
+          <input
+            type="text"
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            placeholder="e.g. skiing, family trip, winter"
+            style={fieldStyle}
+          />
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <button
+            onClick={handleSave}
+            disabled={saving || reclassifying}
+            style={{
+              flex: 1,
+              padding: "12px 20px",
+              borderRadius: 10,
+              border: "none",
+              background: saving ? C.warmBorder : C.amber,
+              color: C.white,
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: saving ? "default" : "pointer",
+            }}
+          >
+            {saving ? "Saving..." : "Save Corrections"}
+          </button>
+          <button
+            onClick={handleReclassify}
+            disabled={saving || reclassifying}
+            style={{
+              padding: "12px 20px",
+              borderRadius: 10,
+              border: `1.5px solid ${C.amberBorder}`,
+              background: reclassifying ? C.warm : C.white,
+              color: reclassifying ? C.muted : C.soft,
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: reclassifying ? "default" : "pointer",
+            }}
+          >
+            {reclassifying ? "Re-classifying..." : "Re-classify"}
+          </button>
+        </div>
+
+        {/* Status message */}
+        {status && (
+          <div
+            style={{
+              padding: "10px 14px",
+              borderRadius: 8,
+              fontSize: 13,
+              background: status.ok ? C.greenBg : C.redBg,
+              color: status.ok ? C.green : C.red,
+              border: `1px solid ${status.ok ? C.green + "30" : C.red + "30"}`,
+            }}
+          >
+            {status.msg}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ── Vault Card ───────────────────────────────────────────────────────────────
-const VaultCard = ({ item, onPhotoClick }) => {
+const VaultCard = ({ item, onPhotoClick, onEdit }) => {
   const cl = item.classification || {};
   const sentimentColors = {
     joyful: C.green,
@@ -486,6 +729,14 @@ const VaultCard = ({ item, onPhotoClick }) => {
         {cl.people && cl.people.length > 0 && (
           <div style={{ fontSize: 12, color: C.muted }}>People: {cl.people.join(", ")}</div>
         )}
+        {cl.location && (
+          <div style={{ fontSize: 12, color: C.muted }}>Location: {cl.location}</div>
+        )}
+        {item.corrections && (
+          <div style={{ fontSize: 11, color: C.green, fontStyle: "italic" }}>
+            Corrected{item.corrections.people ? ` — ${item.corrections.people.join(", ")}` : ""}
+          </div>
+        )}
         {cl.tags && cl.tags.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: "auto" }}>
             {cl.tags.map((t) => (
@@ -504,6 +755,24 @@ const VaultCard = ({ item, onPhotoClick }) => {
             ))}
           </div>
         )}
+        {/* Edit button */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit && onEdit(item); }}
+          style={{
+            marginTop: 8,
+            padding: "6px 14px",
+            borderRadius: 8,
+            border: `1.5px solid ${C.amberBorder}`,
+            background: C.cream,
+            color: C.soft,
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+            alignSelf: "flex-start",
+          }}
+        >
+          Edit Details
+        </button>
       </div>
     </div>
   );
@@ -683,9 +952,10 @@ const ChatView = ({ manifests, onPhotoClick }) => {
 };
 
 // ── Vault View ───────────────────────────────────────────────────────────────
-const VaultView = ({ manifests, onPhotoClick }) => {
+const VaultView = ({ manifests, onPhotoClick, onRefresh }) => {
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
+  const [editing, setEditing] = useState(null);
 
   const filtered = manifests.filter((m) => {
     const cl = m.classification || {};
@@ -752,13 +1022,23 @@ const VaultView = ({ manifests, onPhotoClick }) => {
         }}
       >
         {filtered.map((m) => (
-          <VaultCard key={m.id || m.driveFileId} item={m} onPhotoClick={onPhotoClick} />
+          <VaultCard key={m.id || m.driveFileId} item={m} onPhotoClick={onPhotoClick} onEdit={setEditing} />
         ))}
       </div>
       {filtered.length === 0 && (
         <div style={{ textAlign: "center", padding: 40, color: C.muted, fontSize: 16 }}>
           No items found.
         </div>
+      )}
+
+      {/* Edit side panel */}
+      {editing && (
+        <EditPanel
+          item={editing}
+          onClose={() => setEditing(null)}
+          onSave={() => { if (onRefresh) onRefresh(); }}
+          onReclassify={() => { if (onRefresh) onRefresh(); setEditing(null); }}
+        />
       )}
     </div>
   );
@@ -1087,7 +1367,10 @@ export default function FamilyHub() {
           <ChatView manifests={manifests} onPhotoClick={openPhoto} />
         ) : tab === "vault" ? (
           <div style={{ flex: 1, overflowY: "auto" }}>
-            <VaultView manifests={manifests} onPhotoClick={openPhoto} />
+            <VaultView manifests={manifests} onPhotoClick={openPhoto} onRefresh={async () => {
+              const data = await loadManifests();
+              if (data) setManifests(data);
+            }} />
           </div>
         ) : (
           <div style={{ flex: 1, overflowY: "auto" }}>

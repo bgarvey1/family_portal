@@ -6,8 +6,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // In production (Cloud Run), set the full URL.
 const CLOUD_BACKEND_URL = "https://familyhub-backend-761807984124.us-east1.run.app";
 const BACKEND_KEY = "YOUR_BACKEND_KEY";
-// Anthropic API — used client-side for two-pass RAG chat
-const ANTHROPIC_KEY = "YOUR_ANTHROPIC_API_KEY";
 
 // Auto-detect: if running on localhost, use Vite proxy (empty base); otherwise use Cloud Run URL
 const IS_LOCAL = typeof window !== "undefined" && window.location.hostname === "localhost";
@@ -85,27 +83,17 @@ const thumbUrl = (driveFileId) =>
     : null;
 
 const claudeChat = async (messages, system) => {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+  const r = await apiFetch("/api/chat", {
     method: "POST",
-    headers: {
-      "x-api-key": ANTHROPIC_KEY,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 1024,
-      system,
-      messages,
-    }),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ messages, system }),
   });
   if (!r.ok) {
     const err = await r.text();
-    throw new Error(`Claude API ${r.status}: ${err}`);
+    throw new Error(`Chat API ${r.status}: ${err}`);
   }
   const data = await r.json();
-  return data.content?.[0]?.text || "";
+  return data.text || "";
 };
 
 // ── Two-pass RAG ─────────────────────────────────────────────────────────────
