@@ -77,8 +77,22 @@ const apiFetch = (path, opts = {}) =>
     headers: { "x-api-key": BACKEND_KEY, ...opts.headers },
   });
 
-// Build a proxied thumbnail URL for a Drive file (goes through our backend)
-const thumbUrl = (driveFileId) =>
+// Build a proxied thumbnail URL — works for both Drive files and uploaded files
+const thumbUrl = (item) => {
+  if (!item) return null;
+  // Uploaded files (stored in GCS)
+  if (item.source === "upload") {
+    return `${BACKEND_URL}/api/uploads/${item.id}/image?key=${BACKEND_KEY}`;
+  }
+  // Drive files
+  if (item.driveFileId) {
+    return `${BACKEND_URL}/api/files/${item.driveFileId}/thumbnail?key=${BACKEND_KEY}`;
+  }
+  return null;
+};
+
+// Legacy helper for code that only has a driveFileId
+const driveThumbUrl = (driveFileId) =>
   driveFileId
     ? `${BACKEND_URL}/api/files/${driveFileId}/thumbnail?key=${BACKEND_KEY}`
     : null;
@@ -390,7 +404,7 @@ const ChatMessage = ({ msg, onPhotoClick }) => {
         </div>
       )}
       {/* Inline photos from sources */}
-      {msg.sources && msg.sources.filter((s) => s.driveFileId && (s.classification?.category === "photo" || s.mimeType?.startsWith("image/"))).length > 0 && (
+      {msg.sources && msg.sources.filter((s) => (s.driveFileId || s.source === "upload") && (s.classification?.category === "photo" || s.mimeType?.startsWith("image/"))).length > 0 && (
         <div
           style={{
             display: "flex",
@@ -401,15 +415,15 @@ const ChatMessage = ({ msg, onPhotoClick }) => {
           }}
         >
           {msg.sources
-            .filter((s) => s.driveFileId && (s.classification?.category === "photo" || s.mimeType?.startsWith("image/")))
+            .filter((s) => (s.driveFileId || s.source === "upload") && (s.classification?.category === "photo" || s.mimeType?.startsWith("image/")))
             .map((s) => (
               <div
                 key={s.id}
-                onClick={() => onPhotoClick && onPhotoClick(thumbUrl(s.driveFileId), s.classification?.title || "Photo")}
+                onClick={() => onPhotoClick && onPhotoClick(thumbUrl(s), s.classification?.title || "Photo")}
                 style={{ cursor: "pointer" }}
               >
                 <img
-                  src={thumbUrl(s.driveFileId)}
+                  src={thumbUrl(s)}
                   alt={s.classification?.title || "Photo"}
                   style={{
                     width: 120,
@@ -692,8 +706,8 @@ const VaultCard = ({ item, onPhotoClick, onEdit }) => {
     formal: C.blue,
     somber: "#5B3FA6",
   };
-  const isPhoto = item.driveFileId && cl.category === "photo";
-  const imgSrc = isPhoto ? thumbUrl(item.driveFileId) : null;
+  const isPhoto = (item.driveFileId || item.source === "upload") && cl.category === "photo";
+  const imgSrc = isPhoto ? thumbUrl(item) : null;
   return (
     <div
       style={{

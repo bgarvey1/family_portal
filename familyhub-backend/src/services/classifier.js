@@ -1,4 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk');
+const ExifParser = require('exif-parser');
+const sharp = require('sharp');
 const config = require('../config');
 
 const anthropic = new Anthropic({ apiKey: config.anthropicApiKey });
@@ -50,8 +52,60 @@ function buildContext(fileName, { exif, knowledge } = {}) {
   return lines.join('\n');
 }
 
+// Extract EXIF directly from image file bytes (works even when cloud APIs strip metadata)
+function extractExifFromBytes(fileBuffer, mimeType) {
+  // exif-parser only works with JPEG/TIFF
+  if (!mimeType || (!mimeType.includes('jpeg') && !mimeType.includes('jpg') && !mimeType.includes('tiff'))) {
+    return null;
+  }
+
+  try {
+    const parser = ExifParser.create(fileBuffer);
+    const result = parser.parse();
+    const tags = result.tags || {};
+    const exif = {};
+
+    // Timestamp — DateTimeOriginal is when the photo was actually taken
+    if (tags.DateTimeOriginal) {
+      exif.time = new Date(tags.DateTimeOriginal * 1000).toISOString();
+    } else if (tags.CreateDate) {
+      exif.time = new Date(tags.CreateDate * 1000).toISOString();
+    }
+
+    // GPS
+    if (tags.GPSLatitude != null && tags.GPSLongitude != null) {
+      exif.location = {
+        latitude: tags.GPSLatitude,
+        longitude: tags.GPSLongitude,
+        altitude: tags.GPSAltitude || null,
+      };
+    }
+
+    // Camera
+    if (tags.Make) exif.cameraMake = tags.Make;
+    if (tags.Model) exif.cameraModel = tags.Model;
+
+    // Image dimensions
+    if (result.imageSize) {
+      exif.width = result.imageSize.width;
+      exif.height = result.imageSize.height;
+    }
+
+    // Exposure info
+    if (tags.ExposureTime) exif.exposureTime = tags.ExposureTime;
+    if (tags.FNumber) exif.aperture = tags.FNumber;
+    if (tags.ISO) exif.isoSpeed = tags.ISO;
+    if (tags.FocalLength) exif.focalLength = tags.FocalLength;
+
+    return Object.keys(exif).length > 0 ? exif : null;
+  } catch (err) {
+    console.warn(`EXIF parse failed for ${mimeType}: ${err.message}`);
+    return null;
+  }
+}
+
 // Extract useful EXIF fields from Google Drive's imageMediaMetadata
-function extractExif(imageMediaMetadata) {
+function extractExifFromDrive(imageMediaMetadata) {
   if (!imageMediaMetadata) return null;
   const m = imageMediaMetadata;
   const exif = {};
@@ -76,10 +130,46 @@ function extractExif(imageMediaMetadata) {
   return Object.keys(exif).length > 0 ? exif : null;
 }
 
-async function classifyFile(fileBuffer, mimeType, fileName, { exif, knowledge } = {}) {
-  const base64Data = fileBuffer.toString('base64');
+// Merge EXIF from multiple sources — file bytes take priority (most reliable),
+// then Drive API metadata as fallback
+function extractExif(imageMediaMetadata, fileBuffer, mimeType) {
+  const fromBytes = fileBuffer ? extractExifFromBytes(fileBuffer, mimeType) : null;
+  const fromDrive = extractExifFromDrive(imageMediaMetadata);
 
-  const contentBlock = mimeType === 'application/pdf'
+  if (!fromBytes && !fromDrive) return null;
+  if (!fromBytes) return fromDrive;
+  if (!fromDrive) return fromBytes;
+
+  // Merge: bytes wins for each field, Drive fills gaps
+  return { ...fromDrive, ...fromBytes };
+}
+
+// Resize image if over Claude's 5MB base64 limit (~3.75MB raw due to base64 overhead)
+const MAX_IMAGE_BYTES = 3_500_000;
+
+async function resizeIfNeeded(fileBuffer, mimeType) {
+  if (!mimeType.startsWith('image/') || mimeType === 'image/gif') {
+    return { buffer: fileBuffer, mimeType };
+  }
+  if (fileBuffer.length <= MAX_IMAGE_BYTES) {
+    return { buffer: fileBuffer, mimeType };
+  }
+
+  console.log(`  Resizing ${(fileBuffer.length / 1024 / 1024).toFixed(1)}MB image for classification...`);
+  const resized = await sharp(fileBuffer)
+    .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 85 })
+    .toBuffer();
+  console.log(`  Resized to ${(resized.length / 1024 / 1024).toFixed(1)}MB`);
+  return { buffer: resized, mimeType: 'image/jpeg' };
+}
+
+async function classifyFile(fileBuffer, mimeType, fileName, { exif, knowledge } = {}) {
+  // Resize large images to stay under Claude's limit
+  const { buffer: classifyBuffer, mimeType: classifyMime } = await resizeIfNeeded(fileBuffer, mimeType);
+  const base64Data = classifyBuffer.toString('base64');
+
+  const contentBlock = classifyMime === 'application/pdf'
     ? {
         type: 'document',
         source: {
@@ -92,7 +182,7 @@ async function classifyFile(fileBuffer, mimeType, fileName, { exif, knowledge } 
         type: 'image',
         source: {
           type: 'base64',
-          media_type: mimeType,
+          media_type: classifyMime,
           data: base64Data,
         },
       };

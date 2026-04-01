@@ -108,6 +108,10 @@ router.post('/manifests/:id/reclassify', requireApiKey, async (req, res) => {
       manifest.mimeType
     );
 
+    // Re-extract EXIF from file bytes (in case it wasn't captured before)
+    const freshExif = classifier.extractExif(null, buffer, mimeType);
+    const exif = freshExif || manifest.exif || null;
+
     // Load current knowledge base
     const knowledge = await firestoreService.getAllKnowledge();
 
@@ -116,7 +120,7 @@ router.post('/manifests/:id/reclassify', requireApiKey, async (req, res) => {
       buffer,
       mimeType,
       manifest.fileName,
-      { exif: manifest.exif || null, knowledge }
+      { exif, knowledge }
     );
 
     // Store old classification for reference
@@ -124,6 +128,7 @@ router.post('/manifests/:id/reclassify', requireApiKey, async (req, res) => {
 
     await firestoreService.updateManifest(req.params.id, {
       classification: newClassification,
+      exif,
       previousClassification,
       reclassifiedAt: new Date().toISOString(),
     });

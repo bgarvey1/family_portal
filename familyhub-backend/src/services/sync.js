@@ -41,8 +41,8 @@ async function runSync() {
         console.log(`Processing: ${file.name} (${file.mimeType})`);
         const { buffer, mimeType } = await driveService.downloadFile(file.id, file.mimeType);
 
-        // Extract EXIF from Drive's imageMediaMetadata (GPS, timestamp, camera)
-        const exif = classifier.extractExif(file.imageMediaMetadata);
+        // Extract EXIF from file bytes + Drive metadata (bytes take priority)
+        const exif = classifier.extractExif(file.imageMediaMetadata, buffer, mimeType);
         if (exif) {
           console.log(`  EXIF: ${JSON.stringify(exif)}`);
         }
