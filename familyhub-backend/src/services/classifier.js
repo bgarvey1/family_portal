@@ -53,9 +53,46 @@ function buildContext(fileName, { exif, knowledge } = {}) {
 }
 
 // Extract EXIF directly from image file bytes (works even when cloud APIs strip metadata)
-function extractExifFromBytes(fileBuffer, mimeType) {
+async function extractExifFromBytes(fileBuffer, mimeType) {
+  if (!mimeType) return null;
+
+  // For HEIC/HEIF, use sharp to extract metadata (exif-parser can't read them)
+  if (mimeType.includes('heic') || mimeType.includes('heif')) {
+    try {
+      const metadata = await sharp(fileBuffer).metadata();
+      const exif = {};
+      if (metadata.width) exif.width = metadata.width;
+      if (metadata.height) exif.height = metadata.height;
+      // sharp can expose EXIF via metadata.exif buffer — parse it if present
+      if (metadata.exif) {
+        try {
+          const parser = ExifParser.create(metadata.exif);
+          const result = parser.parse();
+          const tags = result.tags || {};
+          if (tags.DateTimeOriginal) exif.time = new Date(tags.DateTimeOriginal * 1000).toISOString();
+          else if (tags.CreateDate) exif.time = new Date(tags.CreateDate * 1000).toISOString();
+          if (tags.GPSLatitude != null && tags.GPSLongitude != null) {
+            exif.location = { latitude: tags.GPSLatitude, longitude: tags.GPSLongitude, altitude: tags.GPSAltitude || null };
+          }
+          if (tags.Make) exif.cameraMake = tags.Make;
+          if (tags.Model) exif.cameraModel = tags.Model;
+          if (tags.ExposureTime) exif.exposureTime = tags.ExposureTime;
+          if (tags.FNumber) exif.aperture = tags.FNumber;
+          if (tags.ISO) exif.isoSpeed = tags.ISO;
+          if (tags.FocalLength) exif.focalLength = tags.FocalLength;
+        } catch (e) {
+          console.warn(`HEIC EXIF parse failed: ${e.message}`);
+        }
+      }
+      return Object.keys(exif).length > 0 ? exif : null;
+    } catch (err) {
+      console.warn(`HEIC metadata extraction failed: ${err.message}`);
+      return null;
+    }
+  }
+
   // exif-parser only works with JPEG/TIFF
-  if (!mimeType || (!mimeType.includes('jpeg') && !mimeType.includes('jpg') && !mimeType.includes('tiff'))) {
+  if (!mimeType.includes('jpeg') && !mimeType.includes('jpg') && !mimeType.includes('tiff')) {
     return null;
   }
 
@@ -132,8 +169,8 @@ function extractExifFromDrive(imageMediaMetadata) {
 
 // Merge EXIF from multiple sources — file bytes take priority (most reliable),
 // then Drive API metadata as fallback
-function extractExif(imageMediaMetadata, fileBuffer, mimeType) {
-  const fromBytes = fileBuffer ? extractExifFromBytes(fileBuffer, mimeType) : null;
+async function extractExif(imageMediaMetadata, fileBuffer, mimeType) {
+  const fromBytes = fileBuffer ? await extractExifFromBytes(fileBuffer, mimeType) : null;
   const fromDrive = extractExifFromDrive(imageMediaMetadata);
 
   if (!fromBytes && !fromDrive) return null;
@@ -147,20 +184,28 @@ function extractExif(imageMediaMetadata, fileBuffer, mimeType) {
 // Resize image if over Claude's 5MB base64 limit (~3.75MB raw due to base64 overhead)
 const MAX_IMAGE_BYTES = 3_500_000;
 
+// Claude API only accepts these image types
+const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
 async function resizeIfNeeded(fileBuffer, mimeType) {
   if (!mimeType.startsWith('image/') || mimeType === 'image/gif') {
     return { buffer: fileBuffer, mimeType };
   }
-  if (fileBuffer.length <= MAX_IMAGE_BYTES) {
+
+  const needsConversion = !SUPPORTED_IMAGE_TYPES.includes(mimeType);
+  const needsResize = fileBuffer.length > MAX_IMAGE_BYTES;
+
+  if (!needsConversion && !needsResize) {
     return { buffer: fileBuffer, mimeType };
   }
 
-  console.log(`  Resizing ${(fileBuffer.length / 1024 / 1024).toFixed(1)}MB image for classification...`);
+  const reason = needsConversion ? `unsupported format (${mimeType})` : `${(fileBuffer.length / 1024 / 1024).toFixed(1)}MB exceeds limit`;
+  console.log(`  Converting image: ${reason}`);
   const resized = await sharp(fileBuffer)
     .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 85 })
     .toBuffer();
-  console.log(`  Resized to ${(resized.length / 1024 / 1024).toFixed(1)}MB`);
+  console.log(`  Converted to JPEG: ${(resized.length / 1024 / 1024).toFixed(1)}MB`);
   return { buffer: resized, mimeType: 'image/jpeg' };
 }
 

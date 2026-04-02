@@ -109,7 +109,7 @@ router.post('/manifests/:id/reclassify', requireApiKey, async (req, res) => {
     );
 
     // Re-extract EXIF from file bytes (in case it wasn't captured before)
-    const freshExif = classifier.extractExif(null, buffer, mimeType);
+    const freshExif = await classifier.extractExif(null, buffer, mimeType);
     const exif = freshExif || manifest.exif || null;
 
     // Load current knowledge base

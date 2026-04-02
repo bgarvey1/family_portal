@@ -57,7 +57,7 @@ router.post('/upload', requireApiKey, upload.single('file'), async (req, res) =>
 
   try {
     // 1. Extract EXIF from the raw bytes (before anything strips it)
-    const exif = classifier.extractExif(null, buffer, mimetype);
+    const exif = await classifier.extractExif(null, buffer, mimetype);
     if (exif) {
       console.log(`  EXIF extracted: time=${exif.time || 'none'}, GPS=${exif.location ? 'yes' : 'no'}, camera=${exif.cameraModel || 'none'}`);
     } else {
@@ -149,7 +149,7 @@ router.post('/upload/simple', express.raw({ type: '*/*', limit: '25mb' }), async
   console.log(`Simple upload: ${fileName} (${mimeType}, ${(buffer.length / 1024).toFixed(0)}KB) from ${contributor}`);
 
   try {
-    const exif = classifier.extractExif(null, buffer, mimeType);
+    const exif = await classifier.extractExif(null, buffer, mimeType);
     if (exif) {
       console.log(`  EXIF: time=${exif.time || 'none'}, GPS=${exif.location ? 'yes' : 'no'}`);
     }
