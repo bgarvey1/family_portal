@@ -7,6 +7,7 @@ const manifestRoutes = require('./routes/manifests');
 const fileRoutes = require('./routes/files');
 const chatRoutes = require('./routes/chat');
 const uploadRoutes = require('./routes/upload');
+const setupRoutes = require('./routes/setup');
 
 const app = express();
 
@@ -19,6 +20,7 @@ app.use('/api', manifestRoutes);
 app.use('/api', fileRoutes);
 app.use('/api', chatRoutes);
 app.use('/api', uploadRoutes);
+app.use('/api', setupRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
