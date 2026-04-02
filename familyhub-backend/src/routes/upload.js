@@ -1,3 +1,4 @@
+const express = require('express');
 const { Router } = require('express');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
@@ -122,6 +123,71 @@ router.post('/upload', requireApiKey, upload.single('file'), async (req, res) =>
     });
   } catch (err) {
     console.error('Upload error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/upload/simple — accepts raw image body (for Apple Shortcut)
+// API key via query param: ?key=xxx&contributor=Brendan
+// Content-Type from the request tells us the mime type
+router.post('/upload/simple', express.raw({ type: '*/*', limit: '25mb' }), async (req, res) => {
+  // Auth via query param
+  const key = req.query.key;
+  if (!key || key !== config.apiKey) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const buffer = req.body;
+  if (!buffer || buffer.length === 0) {
+    return res.status(400).json({ error: 'No file data received' });
+  }
+
+  const contributor = req.query.contributor || 'unknown';
+  const mimeType = req.headers['content-type'] || 'image/jpeg';
+  const fileName = `upload_${Date.now()}.${mimeType.includes('png') ? 'png' : mimeType.includes('heic') ? 'heic' : 'jpg'}`;
+
+  console.log(`Simple upload: ${fileName} (${mimeType}, ${(buffer.length / 1024).toFixed(0)}KB) from ${contributor}`);
+
+  try {
+    const exif = classifier.extractExif(null, buffer, mimeType);
+    if (exif) {
+      console.log(`  EXIF: time=${exif.time || 'none'}, GPS=${exif.location ? 'yes' : 'no'}`);
+    }
+
+    await ensureBucket();
+    const fileId = uuidv4();
+    const gcsPath = `uploads/${fileId}/${fileName}`;
+    const file = storage.bucket(BUCKET_NAME).file(gcsPath);
+    await file.save(buffer, { contentType: mimeType });
+
+    const knowledge = await firestoreService.getAllKnowledge();
+    const classification = await classifier.classifyFile(buffer, mimeType, fileName, { exif, knowledge });
+
+    const manifest = {
+      id: fileId,
+      source: 'upload',
+      contributor,
+      fileName,
+      mimeType,
+      fileSize: buffer.length,
+      gcsBucket: BUCKET_NAME,
+      gcsPath,
+      exif: exif || null,
+      classification,
+      corrections: null,
+      createdAt: new Date().toISOString(),
+    };
+
+    await firestoreService.writeManifest(manifest);
+    console.log(`  Classified: ${classification.title}`);
+
+    res.json({
+      message: 'Photo uploaded and classified!',
+      id: fileId,
+      title: classification.title,
+    });
+  } catch (err) {
+    console.error('Simple upload error:', err);
     res.status(500).json({ error: err.message });
   }
 });
