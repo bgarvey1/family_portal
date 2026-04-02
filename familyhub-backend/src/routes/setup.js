@@ -6,16 +6,19 @@ const router = Router();
 // Serve the signed shortcut file
 router.get('/setup/shortcut', (req, res) => {
   const file = path.join(__dirname, '..', 'static', 'Send_to_FamilyHub.shortcut');
-  res.setHeader('Content-Type', 'application/x-apple-shortcut');
-  res.setHeader('Content-Disposition', 'attachment; filename="Send_to_FamilyHub.shortcut"');
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', 'inline; filename="Send_to_FamilyHub.shortcut"');
   res.sendFile(file);
 });
 
 // Setup page — one-tap install for family members
 router.get('/setup', (req, res) => {
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  // Cloud Run is behind a proxy, so use x-forwarded-proto for the real protocol
+  const proto = req.get('x-forwarded-proto') || req.protocol;
+  const baseUrl = `${proto}://${req.get('host')}`;
   const shortcutUrl = `${baseUrl}/api/setup/shortcut`;
-  const importUrl = `shortcuts://import-shortcut?url=${encodeURIComponent(shortcutUrl)}&name=${encodeURIComponent('Send to FamilyHub')}`;
+  // Direct download — iOS opens .shortcut files in the Shortcuts app automatically
+  const installUrl = shortcutUrl;
 
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -125,7 +128,7 @@ router.get('/setup', (req, res) => {
     <h1>FamilyHub Setup</h1>
     <p class="subtitle">Add photos from your phone's camera roll directly to the family vault.</p>
 
-    <a href="${importUrl}" class="install-btn">
+    <a href="${installUrl}" class="install-btn">
       Install "Send to FamilyHub"
     </a>
 
