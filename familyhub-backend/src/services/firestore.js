@@ -46,6 +46,28 @@ async function getAllManifests() {
   return snapshot.docs.map(doc => doc.data());
 }
 
+async function getManifestsPaginated(limit = 50, startAfterId = null) {
+  let query = db.collection(MANIFESTS_COLLECTION)
+    .orderBy('createdAt', 'desc')
+    .limit(limit);
+
+  if (startAfterId) {
+    const startDoc = await db.collection(MANIFESTS_COLLECTION).doc(startAfterId).get();
+    if (startDoc.exists) {
+      query = query.startAfter(startDoc);
+    }
+  }
+
+  const snapshot = await query.get();
+  const manifests = snapshot.docs.map(doc => doc.data());
+  const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+  return {
+    manifests,
+    nextCursor: lastDoc ? lastDoc.id : null,
+    hasMore: manifests.length === limit,
+  };
+}
+
 async function getManifest(id) {
   const doc = await db.collection(MANIFESTS_COLLECTION).doc(id).get();
   return doc.exists ? doc.data() : null;
@@ -166,6 +188,7 @@ module.exports = {
   manifestExists,
   writeManifest,
   getAllManifests,
+  getManifestsPaginated,
   getManifest,
   updateManifest,
   addKnowledge,

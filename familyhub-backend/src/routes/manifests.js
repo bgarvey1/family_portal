@@ -11,11 +11,21 @@ const router = Router();
 const storage = new Storage();
 const anthropic = new Anthropic({ apiKey: config.anthropicApiKey });
 
-// GET /api/manifests — list all manifests
+// GET /api/manifests — list manifests (supports pagination)
+// Query params: ?limit=50&cursor=<lastId> for paginated results
+// Omit params to get all manifests (backwards compatible)
 router.get('/manifests', requireApiKey, async (req, res) => {
   try {
-    const manifests = await firestoreService.getAllManifests();
-    res.json({ manifests, count: manifests.length });
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : null;
+    const cursor = req.query.cursor || null;
+
+    if (limit) {
+      const result = await firestoreService.getManifestsPaginated(limit, cursor);
+      res.json({ manifests: result.manifests, count: result.manifests.length, nextCursor: result.nextCursor, hasMore: result.hasMore });
+    } else {
+      const manifests = await firestoreService.getAllManifests();
+      res.json({ manifests, count: manifests.length });
+    }
   } catch (err) {
     console.error('Error fetching manifests:', err);
     res.status(500).json({ error: err.message });

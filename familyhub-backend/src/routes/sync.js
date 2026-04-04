@@ -1,14 +1,18 @@
 const { Router } = require('express');
 const { requireApiKey, requireOidc } = require('../middleware/auth');
+const { createRateLimiter } = require('../middleware/rateLimit');
 const syncService = require('../services/sync');
 const firestoreService = require('../services/firestore');
+
+// Sync triggers Drive download + AI classification — limit to 5 per minute
+const syncLimiter = createRateLimiter({ windowMs: 60_000, max: 5, message: 'Too many sync requests. Please wait.' });
 
 const router = Router();
 
 let syncInProgress = false;
 let lastSyncResult = null;
 
-router.post('/sync/await', requireApiKey, async (req, res) => {
+router.post('/sync/await', requireApiKey, syncLimiter, async (req, res) => {
   try {
     if (syncInProgress) {
       return res.status(409).json({ error: 'Sync already in progress' });
