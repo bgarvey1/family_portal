@@ -1,10 +1,14 @@
 const { Router } = require('express');
 const { Storage } = require('@google-cloud/storage');
 const { requireApiKey } = require('../middleware/auth');
+const { createRateLimiter } = require('../middleware/rateLimit');
 const firestoreService = require('../services/firestore');
 const facesService = require('../services/faces');
 const driveService = require('../services/drive');
 const config = require('../config');
+
+// Face scan sends every photo to Gemini — limit to 3 per minute
+const scanLimiter = createRateLimiter({ windowMs: 60_000, max: 3, message: 'Too many scan requests. Please wait.' });
 
 const router = Router();
 const storage = new Storage();
@@ -173,7 +177,7 @@ router.post('/faces/identify', requireApiKey, async (req, res) => {
 
 // POST /api/faces/scan — scan entire vault for a specific person
 // Body: { personName, apply: false } — set apply=true to auto-label matches
-router.post('/faces/scan', requireApiKey, async (req, res) => {
+router.post('/faces/scan', requireApiKey, scanLimiter, async (req, res) => {
   try {
     const { personName, apply } = req.body;
     if (!personName) {

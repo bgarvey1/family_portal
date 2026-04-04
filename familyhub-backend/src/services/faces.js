@@ -3,6 +3,7 @@ const { Storage } = require('@google-cloud/storage');
 const sharp = require('sharp');
 const config = require('../config');
 const firestoreService = require('./firestore');
+const driveService = require('./drive');
 
 const storage = new Storage();
 const BUCKET_NAME = `${config.gcpProjectId}-familyhub-uploads`;
@@ -254,7 +255,6 @@ async function scanVaultForPerson(personName, faceLibrary, manifests) {
         if (manifest.source === 'upload' && manifest.gcsBucket && manifest.gcsPath) {
           [buffer] = await storage.bucket(manifest.gcsBucket).file(manifest.gcsPath).download();
         } else if (manifest.driveFileId) {
-          const driveService = require('./drive');
           const result = await driveService.downloadFile(manifest.driveFileId, manifest.mimeType);
           buffer = result.buffer;
         } else {

@@ -12,6 +12,8 @@ const SUPPORTED_MIME_TYPES = [
   'image/png',
   'image/gif',
   'image/webp',
+  'image/heic',
+  'image/heif',
   'application/pdf',
 ];
 
