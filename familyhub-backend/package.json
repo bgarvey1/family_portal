@@ -10,6 +10,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
     "@google-cloud/storage": "^7.19.0",
+    "@google-cloud/vertexai": "^1.10.4",
+    "@google/generative-ai": "^0.24.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "exif-parser": "^0.1.12",

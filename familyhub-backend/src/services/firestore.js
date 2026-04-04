@@ -10,6 +10,9 @@ const db = admin.firestore();
 const MANIFESTS_COLLECTION = 'vault_manifests';
 const META_COLLECTION = 'vault_meta';
 const KNOWLEDGE_COLLECTION = 'vault_knowledge';
+const FACES_COLLECTION = 'vault_faces';
+const DELETED_COLLECTION = 'vault_deleted';
+const PROFILES_COLLECTION = 'vault_profiles';
 const SYNC_CONFIG_DOC = 'sync_config';
 
 async function getSyncCursor() {
@@ -77,6 +80,86 @@ async function getSyncStatus() {
   };
 }
 
+// ── Face References ─────────────────────────────────────────────────────────
+async function addFaceReference(entry) {
+  await db.collection(FACES_COLLECTION).doc(entry.id).set(entry);
+  return entry.id;
+}
+
+async function getAllFaceReferences() {
+  const snapshot = await db.collection(FACES_COLLECTION)
+    .orderBy('createdAt', 'desc')
+    .get();
+  return snapshot.docs.map(doc => doc.data());
+}
+
+async function getFaceReferencesByPerson(personName) {
+  const snapshot = await db.collection(FACES_COLLECTION)
+    .where('personName', '==', personName)
+    .get();
+  return snapshot.docs.map(doc => doc.data());
+}
+
+async function deleteFaceReference(id) {
+  await db.collection(FACES_COLLECTION).doc(id).delete();
+}
+
+async function deleteManifest(id) {
+  await db.collection(MANIFESTS_COLLECTION).doc(id).delete();
+}
+
+// Track deleted items so sync doesn't re-import them
+async function markDeleted(driveFileId) {
+  if (!driveFileId) return;
+  await db.collection(DELETED_COLLECTION).doc(driveFileId).set({
+    driveFileId,
+    deletedAt: new Date().toISOString(),
+  });
+}
+
+async function isDeleted(driveFileId) {
+  if (!driveFileId) return false;
+  const doc = await db.collection(DELETED_COLLECTION).doc(driveFileId).get();
+  return doc.exists;
+}
+
+async function deleteKnowledge(id) {
+  await db.collection(KNOWLEDGE_COLLECTION).doc(id).delete();
+}
+
+async function getKnowledgeByManifestId(manifestId) {
+  const snapshot = await db.collection(KNOWLEDGE_COLLECTION)
+    .where('manifestId', '==', manifestId)
+    .get();
+  return snapshot.docs.map(doc => doc.data());
+}
+
+// ── Family Profiles ────────────────────────────────────────────────────────
+async function addProfile(profile) {
+  const ref = db.collection(PROFILES_COLLECTION).doc();
+  const entry = { ...profile, id: ref.id, createdAt: new Date().toISOString() };
+  await ref.set(entry);
+  return entry;
+}
+
+async function getAllProfiles() {
+  const snapshot = await db.collection(PROFILES_COLLECTION)
+    .orderBy('createdAt', 'desc')
+    .get();
+  return snapshot.docs.map(doc => doc.data());
+}
+
+async function updateProfile(id, updates) {
+  await db.collection(PROFILES_COLLECTION).doc(id).set(
+    { ...updates, updatedAt: new Date().toISOString() },
+    { merge: true }
+  );
+}
+
+async function deleteProfile(id) {
+  await db.collection(PROFILES_COLLECTION).doc(id).delete();
+}
+
 module.exports = {
   getSyncCursor,
   updateSyncCursor,
@@ -87,5 +170,18 @@ module.exports = {
   updateManifest,
   addKnowledge,
   getAllKnowledge,
+  deleteManifest,
+  markDeleted,
+  isDeleted,
+  deleteKnowledge,
+  getKnowledgeByManifestId,
+  addFaceReference,
+  getAllFaceReferences,
+  getFaceReferencesByPerson,
+  deleteFaceReference,
   getSyncStatus,
+  addProfile,
+  getAllProfiles,
+  updateProfile,
+  deleteProfile,
 };

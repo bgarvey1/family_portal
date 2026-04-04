@@ -32,6 +32,13 @@ async function runSync() {
           continue;
         }
 
+        // Skip files that were previously deleted by the admin
+        const wasDeleted = await firestoreService.isDeleted(file.id);
+        if (wasDeleted) {
+          result.skipped++;
+          continue;
+        }
+
         if (!driveService.isSupportedType(file.mimeType)) {
           console.log(`Skipping unsupported type: ${file.mimeType} (${file.name})`);
           result.skipped++;

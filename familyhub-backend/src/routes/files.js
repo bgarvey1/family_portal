@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { Storage } = require('@google-cloud/storage');
+const sharp = require('sharp');
 const { requireApiKey } = require('../middleware/auth');
 const driveService = require('../services/drive');
 const firestoreService = require('../services/firestore');
@@ -68,12 +69,21 @@ router.get('/uploads/:id/image', requireApiKey, async (req, res) => {
       return res.status(404).json({ error: 'Uploaded file not found' });
     }
 
-    const [buffer] = await storage.bucket(manifest.gcsBucket).file(manifest.gcsPath).download();
+    const [rawBuffer] = await storage.bucket(manifest.gcsBucket).file(manifest.gcsPath).download();
 
-    thumbCache.set(`upload:${id}`, { buffer, mimeType: manifest.mimeType, ts: Date.now() });
+    // Convert HEIC and other unsupported browser formats to JPEG
+    let buffer = rawBuffer;
+    let mimeType = manifest.mimeType;
+    const browserUnsupported = mimeType && (mimeType.includes('heic') || mimeType.includes('heif') || mimeType.includes('tiff'));
+    if (browserUnsupported) {
+      buffer = await sharp(rawBuffer).jpeg({ quality: 90 }).toBuffer();
+      mimeType = 'image/jpeg';
+    }
+
+    thumbCache.set(`upload:${id}`, { buffer, mimeType, ts: Date.now() });
     evictOldCache();
 
-    res.set('Content-Type', manifest.mimeType);
+    res.set('Content-Type', mimeType);
     res.set('Cache-Control', 'public, max-age=900');
     res.send(buffer);
   } catch (err) {
