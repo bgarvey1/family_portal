@@ -5,7 +5,7 @@ const cors = require('cors');
 // whose origin varies and can't be predicted.
 const corsOptions = {
   origin: true,
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'],
 };
 

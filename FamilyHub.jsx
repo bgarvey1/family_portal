@@ -6,8 +6,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // In production (Cloud Run), set the full URL.
 const CLOUD_BACKEND_URL = "https://familyhub-backend-761807984124.us-east1.run.app";
 const BACKEND_KEY = "YOUR_BACKEND_KEY";
-// Anthropic API — used client-side for two-pass RAG chat
-const ANTHROPIC_KEY = "YOUR_ANTHROPIC_API_KEY";
 
 // Auto-detect: if running on localhost, use Vite proxy (empty base); otherwise use Cloud Run URL
 const IS_LOCAL = typeof window !== "undefined" && window.location.hostname === "localhost";
@@ -85,27 +83,17 @@ const thumbUrl = (driveFileId) =>
     : null;
 
 const claudeChat = async (messages, system) => {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+  const r = await apiFetch("/api/chat", {
     method: "POST",
-    headers: {
-      "x-api-key": ANTHROPIC_KEY,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 1024,
-      system,
-      messages,
-    }),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ messages, system }),
   });
   if (!r.ok) {
     const err = await r.text();
-    throw new Error(`Claude API ${r.status}: ${err}`);
+    throw new Error(`Chat API ${r.status}: ${err}`);
   }
   const data = await r.json();
-  return data.content?.[0]?.text || "";
+  return data.text || "";
 };
 
 // ── Two-pass RAG ─────────────────────────────────────────────────────────────
@@ -125,13 +113,24 @@ const buildIndex = (manifests) =>
     .join("\n");
 
 async function ragChat(question, manifests, history) {
-  // Pass 1 — relevance selection
+  // Build conversation summary for context in Pass 1
+  // This helps with follow-up questions like "when was this?"
+  const recentHistory = history.slice(-6);
+  let conversationContext = "";
+  if (recentHistory.length > 0) {
+    const summary = recentHistory
+      .map((m) => `${m.role === "user" ? "Grandparent" : "Assistant"}: ${m.content.substring(0, 150)}`)
+      .join("\n");
+    conversationContext = `\nRecent conversation (for context on follow-up questions):\n${summary}\n`;
+  }
+
+  // Pass 1 — relevance selection (now with conversation context)
   const index = buildIndex(manifests);
   const selectionResult = await claudeChat(
     [
       {
         role: "user",
-        content: `Question from a grandparent: "${question}"\n\nFamily Vault Index (${manifests.length} items):\n${index}\n\nReturn a JSON array of the IDs (max 5) most relevant to answering this question. Return ONLY the JSON array.`,
+        content: `Question from a grandparent: "${question}"${conversationContext}\n\nFamily Vault Index (${manifests.length} items):\n${index}\n\nReturn a JSON array of the IDs (max 5) most relevant to answering this question. If the question is a follow-up, use the conversation context to understand what "this", "that", "those", etc. refer to. Return ONLY the JSON array.`,
       },
     ],
     "You select relevant items from a family vault. Return only a valid JSON array of ID strings."
@@ -151,14 +150,27 @@ async function ragChat(question, manifests, history) {
   const itemContext = selected
     .map((m, idx) => {
       const c = m.classification || {};
+      const cor = m.corrections || {};
+      const exif = m.exif || {};
       const label = c.title || m.fileName || `Item ${idx + 1}`;
-      const people = (c.people || []).join(", ");
-      const tags = (c.tags || []).join(", ");
+      // Prefer corrected data, fall back to AI classification
+      const people = (cor.people || c.people || []).join(", ");
+      const location = cor.location || c.location || "";
+      const tags = (cor.tags || c.tags || []).join(", ");
       const lines = [`"${label}"`];
       if (c.description) lines.push(c.description);
+      if (cor.context) lines.push(`Context: ${cor.context}`);
       if (c.category) lines.push(`Type: ${c.category}`);
       if (people) lines.push(`People: ${people}`);
-      if (c.date_estimate && c.date_estimate !== "unknown") lines.push(`Date: ${c.date_estimate}`);
+      if (location) lines.push(`Location: ${location}`);
+      // Date info: prefer EXIF time, then classification estimate, then Drive timestamps
+      if (exif.time) {
+        lines.push(`Photo taken: ${exif.time}`);
+      } else if (c.date_estimate && c.date_estimate !== "unknown") {
+        lines.push(`Date: ${c.date_estimate}`);
+      } else if (m.driveCreatedTime) {
+        lines.push(`Uploaded: ${new Date(m.driveCreatedTime).toLocaleDateString()}`);
+      }
       if (c.sentiment && c.sentiment !== "unknown") lines.push(`Mood: ${c.sentiment}`);
       if (tags) lines.push(`Tags: ${tags}`);
       return lines.join("\n");

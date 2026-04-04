@@ -1,4 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk');
+const ExifParser = require('exif-parser');
+const sharp = require('sharp');
 const config = require('../config');
 
 const anthropic = new Anthropic({ apiKey: config.anthropicApiKey });
@@ -7,9 +9,10 @@ const CLASSIFICATION_PROMPT = `You are a family document and photo classifier. A
 
 {
   "title": "A short descriptive title for this item",
-  "description": "A 2-3 sentence description of what this file contains",
+  "description": "A 2-3 sentence description of what this file contains. Be specific about people, location, and activity.",
   "category": "One of: photo, document, receipt, letter, certificate, medical, legal, financial, other",
-  "people": ["Array of any people descriptions visible, e.g. 'young boy', 'elderly woman'"],
+  "people": ["Array of people visible — use real names if you can identify them from the family knowledge below, otherwise describe them, e.g. 'man in blue jacket'"],
+  "location": "Best estimate of where this was taken/created, using GPS and visual clues",
   "date_estimate": "Best estimate of when this was created/taken (ISO date or 'unknown')",
   "tags": ["Array of relevant keywords for search"],
   "sentiment": "One of: joyful, neutral, formal, somber"
@@ -17,10 +20,201 @@ const CLASSIFICATION_PROMPT = `You are a family document and photo classifier. A
 
 Return ONLY the JSON object, no additional text.`;
 
-async function classifyFile(fileBuffer, mimeType, fileName) {
-  const base64Data = fileBuffer.toString('base64');
+// Build extra context from EXIF metadata and family knowledge
+function buildContext(fileName, { exif, knowledge } = {}) {
+  const lines = [`File name: "${fileName}"`];
 
-  const contentBlock = mimeType === 'application/pdf'
+  if (exif) {
+    const parts = [];
+    if (exif.time) parts.push(`Taken: ${exif.time}`);
+    if (exif.location) {
+      parts.push(`GPS: ${exif.location.latitude}, ${exif.location.longitude}`);
+    }
+    if (exif.cameraMake || exif.cameraModel) {
+      parts.push(`Camera: ${[exif.cameraMake, exif.cameraModel].filter(Boolean).join(' ')}`);
+    }
+    if (exif.width && exif.height) {
+      parts.push(`Resolution: ${exif.width}×${exif.height}`);
+    }
+    if (parts.length > 0) {
+      lines.push(`\nPhoto metadata (EXIF): ${parts.join(' | ')}`);
+    }
+  }
+
+  if (knowledge && knowledge.length > 0) {
+    lines.push('\nFamily knowledge (use this to identify people and places):');
+    for (const k of knowledge) {
+      lines.push(`- ${k.fact}`);
+    }
+  }
+
+  lines.push(`\n${CLASSIFICATION_PROMPT}`);
+  return lines.join('\n');
+}
+
+// Extract EXIF directly from image file bytes (works even when cloud APIs strip metadata)
+async function extractExifFromBytes(fileBuffer, mimeType) {
+  if (!mimeType) return null;
+
+  // For HEIC/HEIF, use sharp to extract metadata (exif-parser can't read them)
+  if (mimeType.includes('heic') || mimeType.includes('heif')) {
+    try {
+      const metadata = await sharp(fileBuffer).metadata();
+      const exif = {};
+      if (metadata.width) exif.width = metadata.width;
+      if (metadata.height) exif.height = metadata.height;
+      // sharp can expose EXIF via metadata.exif buffer — parse it if present
+      if (metadata.exif) {
+        try {
+          const parser = ExifParser.create(metadata.exif);
+          const result = parser.parse();
+          const tags = result.tags || {};
+          if (tags.DateTimeOriginal) exif.time = new Date(tags.DateTimeOriginal * 1000).toISOString();
+          else if (tags.CreateDate) exif.time = new Date(tags.CreateDate * 1000).toISOString();
+          if (tags.GPSLatitude != null && tags.GPSLongitude != null) {
+            exif.location = { latitude: tags.GPSLatitude, longitude: tags.GPSLongitude, altitude: tags.GPSAltitude || null };
+          }
+          if (tags.Make) exif.cameraMake = tags.Make;
+          if (tags.Model) exif.cameraModel = tags.Model;
+          if (tags.ExposureTime) exif.exposureTime = tags.ExposureTime;
+          if (tags.FNumber) exif.aperture = tags.FNumber;
+          if (tags.ISO) exif.isoSpeed = tags.ISO;
+          if (tags.FocalLength) exif.focalLength = tags.FocalLength;
+        } catch (e) {
+          console.warn(`HEIC EXIF parse failed: ${e.message}`);
+        }
+      }
+      return Object.keys(exif).length > 0 ? exif : null;
+    } catch (err) {
+      console.warn(`HEIC metadata extraction failed: ${err.message}`);
+      return null;
+    }
+  }
+
+  // exif-parser only works with JPEG/TIFF
+  if (!mimeType.includes('jpeg') && !mimeType.includes('jpg') && !mimeType.includes('tiff')) {
+    return null;
+  }
+
+  try {
+    const parser = ExifParser.create(fileBuffer);
+    const result = parser.parse();
+    const tags = result.tags || {};
+    const exif = {};
+
+    // Timestamp — DateTimeOriginal is when the photo was actually taken
+    if (tags.DateTimeOriginal) {
+      exif.time = new Date(tags.DateTimeOriginal * 1000).toISOString();
+    } else if (tags.CreateDate) {
+      exif.time = new Date(tags.CreateDate * 1000).toISOString();
+    }
+
+    // GPS
+    if (tags.GPSLatitude != null && tags.GPSLongitude != null) {
+      exif.location = {
+        latitude: tags.GPSLatitude,
+        longitude: tags.GPSLongitude,
+        altitude: tags.GPSAltitude || null,
+      };
+    }
+
+    // Camera
+    if (tags.Make) exif.cameraMake = tags.Make;
+    if (tags.Model) exif.cameraModel = tags.Model;
+
+    // Image dimensions
+    if (result.imageSize) {
+      exif.width = result.imageSize.width;
+      exif.height = result.imageSize.height;
+    }
+
+    // Exposure info
+    if (tags.ExposureTime) exif.exposureTime = tags.ExposureTime;
+    if (tags.FNumber) exif.aperture = tags.FNumber;
+    if (tags.ISO) exif.isoSpeed = tags.ISO;
+    if (tags.FocalLength) exif.focalLength = tags.FocalLength;
+
+    return Object.keys(exif).length > 0 ? exif : null;
+  } catch (err) {
+    console.warn(`EXIF parse failed for ${mimeType}: ${err.message}`);
+    return null;
+  }
+}
+
+// Extract useful EXIF fields from Google Drive's imageMediaMetadata
+function extractExifFromDrive(imageMediaMetadata) {
+  if (!imageMediaMetadata) return null;
+  const m = imageMediaMetadata;
+  const exif = {};
+
+  if (m.time) exif.time = m.time;
+  if (m.location && (m.location.latitude != null || m.location.longitude != null)) {
+    exif.location = {
+      latitude: m.location.latitude,
+      longitude: m.location.longitude,
+      altitude: m.location.altitude || null,
+    };
+  }
+  if (m.cameraMake) exif.cameraMake = m.cameraMake;
+  if (m.cameraModel) exif.cameraModel = m.cameraModel;
+  if (m.width) exif.width = m.width;
+  if (m.height) exif.height = m.height;
+  if (m.exposureTime) exif.exposureTime = m.exposureTime;
+  if (m.aperture) exif.aperture = m.aperture;
+  if (m.isoSpeed) exif.isoSpeed = m.isoSpeed;
+  if (m.focalLength) exif.focalLength = m.focalLength;
+
+  return Object.keys(exif).length > 0 ? exif : null;
+}
+
+// Merge EXIF from multiple sources — file bytes take priority (most reliable),
+// then Drive API metadata as fallback
+async function extractExif(imageMediaMetadata, fileBuffer, mimeType) {
+  const fromBytes = fileBuffer ? await extractExifFromBytes(fileBuffer, mimeType) : null;
+  const fromDrive = extractExifFromDrive(imageMediaMetadata);
+
+  if (!fromBytes && !fromDrive) return null;
+  if (!fromBytes) return fromDrive;
+  if (!fromDrive) return fromBytes;
+
+  // Merge: bytes wins for each field, Drive fills gaps
+  return { ...fromDrive, ...fromBytes };
+}
+
+// Resize image if over Claude's 5MB base64 limit (~3.75MB raw due to base64 overhead)
+const MAX_IMAGE_BYTES = 3_500_000;
+
+// Claude API only accepts these image types
+const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+async function resizeIfNeeded(fileBuffer, mimeType) {
+  if (!mimeType.startsWith('image/') || mimeType === 'image/gif') {
+    return { buffer: fileBuffer, mimeType };
+  }
+
+  const needsConversion = !SUPPORTED_IMAGE_TYPES.includes(mimeType);
+  const needsResize = fileBuffer.length > MAX_IMAGE_BYTES;
+
+  if (!needsConversion && !needsResize) {
+    return { buffer: fileBuffer, mimeType };
+  }
+
+  const reason = needsConversion ? `unsupported format (${mimeType})` : `${(fileBuffer.length / 1024 / 1024).toFixed(1)}MB exceeds limit`;
+  console.log(`  Converting image: ${reason}`);
+  const resized = await sharp(fileBuffer)
+    .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 85 })
+    .toBuffer();
+  console.log(`  Converted to JPEG: ${(resized.length / 1024 / 1024).toFixed(1)}MB`);
+  return { buffer: resized, mimeType: 'image/jpeg' };
+}
+
+async function classifyFile(fileBuffer, mimeType, fileName, { exif, knowledge } = {}) {
+  // Resize large images to stay under Claude's limit
+  const { buffer: classifyBuffer, mimeType: classifyMime } = await resizeIfNeeded(fileBuffer, mimeType);
+  const base64Data = classifyBuffer.toString('base64');
+
+  const contentBlock = classifyMime === 'application/pdf'
     ? {
         type: 'document',
         source: {
@@ -33,10 +227,12 @@ async function classifyFile(fileBuffer, mimeType, fileName) {
         type: 'image',
         source: {
           type: 'base64',
-          media_type: mimeType,
+          media_type: classifyMime,
           data: base64Data,
         },
       };
+
+  const contextText = buildContext(fileName, { exif, knowledge });
 
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-5-20250929',
@@ -48,7 +244,7 @@ async function classifyFile(fileBuffer, mimeType, fileName) {
           contentBlock,
           {
             type: 'text',
-            text: `File name: "${fileName}"\n\n${CLASSIFICATION_PROMPT}`,
+            text: contextText,
           },
         ],
       },
@@ -73,6 +269,7 @@ async function classifyFile(fileBuffer, mimeType, fileName) {
       description: 'Classification failed - raw file',
       category: 'other',
       people: [],
+      location: 'unknown',
       date_estimate: 'unknown',
       tags: [],
       sentiment: 'neutral',
@@ -80,4 +277,4 @@ async function classifyFile(fileBuffer, mimeType, fileName) {
   }
 }
 
-module.exports = { classifyFile };
+module.exports = { classifyFile, extractExif };

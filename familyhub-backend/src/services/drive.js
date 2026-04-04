@@ -18,7 +18,7 @@ const SUPPORTED_MIME_TYPES = [
 async function listFiles(pageToken = null) {
   const params = {
     q: `'${config.driveFolderId}' in parents and trashed = false`,
-    fields: 'nextPageToken, files(id, name, mimeType, createdTime, modifiedTime, size, thumbnailLink, webViewLink)',
+    fields: 'nextPageToken, files(id, name, mimeType, createdTime, modifiedTime, size, thumbnailLink, webViewLink, imageMediaMetadata)',
     pageSize: 100,
     orderBy: 'createdTime desc',
   };

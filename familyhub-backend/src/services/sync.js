@@ -7,6 +7,12 @@ async function runSync() {
   const result = { processed: 0, skipped: 0, errors: [] };
 
   try {
+    // Load family knowledge base for smarter classification
+    const knowledge = await firestoreService.getAllKnowledge();
+    if (knowledge.length > 0) {
+      console.log(`Loaded ${knowledge.length} family knowledge entries for classification`);
+    }
+
     const allFiles = [];
     let pageToken = null;
 
@@ -26,6 +32,13 @@ async function runSync() {
           continue;
         }
 
+        // Skip files that were previously deleted by the admin
+        const wasDeleted = await firestoreService.isDeleted(file.id);
+        if (wasDeleted) {
+          result.skipped++;
+          continue;
+        }
+
         if (!driveService.isSupportedType(file.mimeType)) {
           console.log(`Skipping unsupported type: ${file.mimeType} (${file.name})`);
           result.skipped++;
@@ -35,7 +48,13 @@ async function runSync() {
         console.log(`Processing: ${file.name} (${file.mimeType})`);
         const { buffer, mimeType } = await driveService.downloadFile(file.id, file.mimeType);
 
-        const classification = await classifier.classifyFile(buffer, mimeType, file.name);
+        // Extract EXIF from file bytes + Drive metadata (bytes take priority)
+        const exif = await classifier.extractExif(file.imageMediaMetadata, buffer, mimeType);
+        if (exif) {
+          console.log(`  EXIF: ${JSON.stringify(exif)}`);
+        }
+
+        const classification = await classifier.classifyFile(buffer, mimeType, file.name, { exif, knowledge });
 
         const manifest = {
           id: uuidv4(),
@@ -47,7 +66,9 @@ async function runSync() {
           driveModifiedTime: file.modifiedTime,
           thumbnailLink: file.thumbnailLink || null,
           webViewLink: file.webViewLink || null,
+          exif: exif || null,
           classification,
+          corrections: null,
           createdAt: new Date().toISOString(),
         };
 
