@@ -7,7 +7,7 @@ const firestoreService = require('./firestore');
 const storage = new Storage();
 const BUCKET_NAME = `${config.gcpProjectId}-familyhub-uploads`;
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyBKaZKveu8TpiL4FDoQqgWo_FodYPbu0YY';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
