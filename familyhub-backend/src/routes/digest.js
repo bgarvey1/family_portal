@@ -137,6 +137,7 @@ ${itemSummaries}`;
       id: m.id,
       driveFileId: m.driveFileId,
       fileName: m.fileName,
+      mimeType: m.mimeType,
       classification: m.classification,
       corrections: m.corrections,
       source: m.source,
