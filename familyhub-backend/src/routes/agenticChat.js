@@ -390,7 +390,7 @@ function isAllowedUrl(urlStr) {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
     const host = parsed.hostname.toLowerCase();
     // Block internal/cloud metadata endpoints
-    if (host === 'localhost' || host === 'metadata.google.internal') return false;
+    if (host === 'localhost' || host === 'metadata.google.internal' || host === 'metadata.goog') return false;
     if (host.endsWith('.internal') || host.endsWith('.local')) return false;
     // Block IPv6 loopback and IPv4-mapped IPv6
     if (host === '[::1]' || host.startsWith('[::ffff:')) return false;
@@ -446,11 +446,28 @@ async function execBrowseWebsite({ name, url }) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
-    const r = await fetch(targetUrl, {
+    const fetchOpts = {
       signal: controller.signal,
       headers: { 'User-Agent': 'FamilyHub/1.0' },
-      redirect: 'error',
-    });
+      redirect: 'manual',
+    };
+
+    // Follow redirects manually, validating each hop against SSRF filter
+    let r = await fetch(targetUrl, fetchOpts);
+    let hops = 0;
+    const MAX_REDIRECTS = 5;
+    while ([301, 302, 303, 307, 308].includes(r.status) && hops < MAX_REDIRECTS) {
+      const location = r.headers.get('location');
+      if (!location) break;
+      const nextUrl = new URL(location, targetUrl).href;
+      if (!isAllowedUrl(nextUrl)) {
+        clearTimeout(timeout);
+        return { error: `Redirect to a blocked URL was prevented.` };
+      }
+      targetUrl = nextUrl;
+      r = await fetch(targetUrl, fetchOpts);
+      hops++;
+    }
     clearTimeout(timeout);
 
     if (!r.ok) {
