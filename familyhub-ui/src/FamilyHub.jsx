@@ -991,7 +991,7 @@ const ChatView = ({ manifests, onPhotoClick }) => {
           ...s,
           thumbUrl: thumbUrl(s),
         }));
-        setMessages([{ role: "assistant", content: data.text, sources }]);
+        setMessages((prev) => [{ role: "assistant", content: data.text, sources }, ...prev]);
       } catch (err) {
         console.error("[digest] Failed to load:", err);
         setDigestFailed(true);
