@@ -383,6 +383,30 @@ async function execGetFamilyOverview() {
 const crawlCache = new Map();
 const CRAWL_TTL = 60 * 60 * 1000; // 1 hour
 
+// SSRF protection: only allow http(s) to public hosts
+function isAllowedUrl(urlStr) {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    // Block internal/cloud metadata endpoints and private IPs
+    if (host === 'localhost' || host === 'metadata.google.internal') return false;
+    if (host.endsWith('.internal') || host.endsWith('.local')) return false;
+    // Block private IP ranges
+    const parts = host.split('.').map(Number);
+    if (parts.length === 4 && parts.every(n => !isNaN(n))) {
+      if (parts[0] === 10) return false;
+      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return false;
+      if (parts[0] === 192 && parts[1] === 168) return false;
+      if (parts[0] === 127) return false;
+      if (parts[0] === 169 && parts[1] === 254) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function execBrowseWebsite({ name, url }) {
   const nameLower = name.toLowerCase();
   const profiles = await firestoreService.getAllProfiles();
@@ -400,6 +424,11 @@ async function execBrowseWebsite({ name, url }) {
       return { error: `${profile.name} has no linked websites in their profile.` };
     }
     targetUrl = link.url;
+  }
+
+  // Validate URL to prevent SSRF
+  if (!isAllowedUrl(targetUrl)) {
+    return { error: `Cannot browse that URL — only public http/https websites are allowed.` };
   }
 
   // Check cache
@@ -613,10 +642,16 @@ router.post('/chat/agentic', requireApiKey, agenticLimiter, async (req, res) => 
     }
 
     // Extract final text response
-    const text = response.content
+    let text = response.content
       .filter(block => block.type === 'text')
       .map(block => block.text)
       .join('');
+
+    if (!text && allSources.length > 0) {
+      text = "I found some wonderful family memories to share with you! Take a look at the photos below.";
+    } else if (!text) {
+      text = "I'm sorry, I had a little trouble putting that together. Could you try asking again?";
+    }
 
     // Deduplicate sources by id, keep first occurrence
     const seenIds = new Set();
