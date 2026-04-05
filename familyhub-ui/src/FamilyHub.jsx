@@ -97,227 +97,24 @@ const driveThumbUrl = (driveFileId) =>
     ? `${BACKEND_URL}/api/files/${driveFileId}/thumbnail?key=${BACKEND_KEY}`
     : null;
 
-const claudeChat = async (messages, system) => {
-  const r = await apiFetch("/api/chat", {
+// ── Agentic Chat (backend handles tool use) ─────────────────────────────────
+const agenticChat = async (message, history) => {
+  const r = await apiFetch("/api/chat/agentic", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ messages, system }),
+    body: JSON.stringify({ message, history }),
   });
   if (!r.ok) {
     const err = await r.text();
     throw new Error(`Chat API ${r.status}: ${err}`);
   }
   const data = await r.json();
-  return data.text || "";
+  const sources = (data.sources || []).map((s) => ({
+    ...s,
+    thumbUrl: thumbUrl(s),
+  }));
+  return { text: data.text || "", sources };
 };
-
-// ── Two-pass RAG ─────────────────────────────────────────────────────────────
-const buildIndex = (manifests) =>
-  manifests
-    .map((m) => {
-      const c = m.classification || {};
-      const cor = m.corrections || {};
-      // Prefer corrections over classification for people/tags/location
-      const people = (cor.people || c.people || []).join(",");
-      const tags = [...(cor.tags || []), ...(c.tags || [])].filter((v, i, a) => a.indexOf(v) === i).join(",");
-      const location = cor.location || c.location || "";
-      return [
-        `ID:${m.id}`,
-        c.category,
-        `"${c.title}"`,
-        people && `People:${people}`,
-        location && `Location:${location}`,
-        tags && `Tags:${tags}`,
-        c.description,
-        cor.context,
-      ].filter(Boolean).join(" | ");
-    })
-    .join("\n");
-
-async function ragChat(question, manifests, history) {
-  // Build conversation summary for context in Pass 1
-  // This helps with follow-up questions like "when was this?"
-  const recentHistory = history.slice(-6);
-  let conversationContext = "";
-  if (recentHistory.length > 0) {
-    const summary = recentHistory
-      .map((m) => `${m.role === "user" ? "Grandparent" : "Assistant"}: ${m.content.substring(0, 150)}`)
-      .join("\n");
-    conversationContext = `\nRecent conversation (for context on follow-up questions):\n${summary}\n`;
-  }
-
-  // Pass 1 — relevance selection (now with conversation context)
-  const index = buildIndex(manifests);
-  const selectionResult = await claudeChat(
-    [
-      {
-        role: "user",
-        content: `Question from a grandparent: "${question}"${conversationContext}\n\nFamily Vault Index (${manifests.length} items):\n${index}\n\nReturn a JSON array of the IDs (max 5) most relevant to answering this question. If the question is a follow-up, use the conversation context to understand what "this", "that", "those", etc. refer to. Return ONLY the JSON array.`,
-      },
-    ],
-    "You select relevant items from a family vault. Return only a valid JSON array of ID strings."
-  );
-
-  let selectedIds = [];
-  try {
-    const match = selectionResult.match(/\[[\s\S]*?\]/);
-    selectedIds = match ? JSON.parse(match[0]) : [];
-  } catch {
-    selectedIds = [];
-  }
-
-  const selected = manifests.filter((m) => selectedIds.includes(m.id));
-
-  // Pass 2 — grounded response (use friendly labels, never expose IDs)
-  const itemContext = selected
-    .map((m, idx) => {
-      const c = m.classification || {};
-      const cor = m.corrections || {};
-      const exif = m.exif || {};
-      const label = c.title || m.fileName || `Item ${idx + 1}`;
-      // Prefer corrected data, fall back to AI classification
-      const people = (cor.people || c.people || []).join(", ");
-      const location = cor.location || c.location || "";
-      const tags = (cor.tags || c.tags || []).join(", ");
-      const lines = [`"${label}"`];
-      if (c.description) lines.push(c.description);
-      if (cor.context) lines.push(`Context: ${cor.context}`);
-      if (c.category) lines.push(`Type: ${c.category}`);
-      if (people) lines.push(`People: ${people}`);
-      if (location) lines.push(`Location: ${location}`);
-      // Date info: prefer EXIF time, then classification estimate, then Drive timestamps
-      if (exif.time) {
-        lines.push(`Photo taken: ${exif.time}`);
-      } else if (c.date_estimate && c.date_estimate !== "unknown") {
-        lines.push(`Date: ${c.date_estimate}`);
-      } else if (m.driveCreatedTime) {
-        lines.push(`Uploaded: ${new Date(m.driveCreatedTime).toLocaleDateString()}`);
-      }
-      if (c.sentiment && c.sentiment !== "unknown") lines.push(`Mood: ${c.sentiment}`);
-      if (tags) lines.push(`Tags: ${tags}`);
-      return lines.join("\n");
-    })
-    .join("\n\n---\n\n");
-
-  // Load family profiles and weather for chat context
-  let familyContext = "";
-  let profiles = [];
-  try {
-    const [profilesRes, weatherRes] = await Promise.all([
-      apiFetch("/api/profiles"),
-      apiFetch("/api/profiles/weather"),
-    ]);
-    const profilesData = profilesRes.ok ? await profilesRes.json() : { profiles: [] };
-    const weatherData = weatherRes.ok ? await weatherRes.json() : { weather: [] };
-
-    profiles = profilesData.profiles || [];
-    const weatherMap = {};
-    for (const w of weatherData.weather || []) {
-      weatherMap[w.profileId] = w.weather;
-    }
-
-    if (profiles.length > 0) {
-      const lines = profiles.map(p => {
-        const parts = [`${p.name}`];
-        if (p.birthday) {
-          const age = calcAge(p.birthday);
-          if (age !== null) parts.push(`age ${age}`);
-          parts.push(`birthday: ${new Date(p.birthday + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric" })}`);
-        }
-        if (p.school) parts.push(`goes to ${p.school}`);
-        if (p.location?.city) {
-          const loc = p.location.state ? `${p.location.city}, ${p.location.state}` : p.location.city;
-          parts.push(`lives in ${loc}`);
-          const w = weatherMap[p.id];
-          if (w) parts.push(`current weather there: ${Math.round(w.temperature)}°F and ${w.description.toLowerCase()}`);
-        }
-        if (p.activities?.length > 0) parts.push(`activities: ${p.activities.join(", ")}`);
-        if (p.links?.length > 0) parts.push(`links: ${p.links.map(l => `${l.label || "link"}: ${l.url}`).join(", ")}`);
-        if (p.notes) parts.push(`notes: ${p.notes}`);
-        return `- ${parts.join(" | ")}`;
-      });
-      familyContext = `\nFAMILY MEMBERS:\n${lines.join("\n")}\n`;
-    }
-  } catch (err) {
-    console.error("[ragChat] Error loading profiles/weather:", err);
-  }
-
-  // Fetch website content for profiles mentioned in the question (separate try/catch)
-  try {
-    const queryLower = question.toLowerCase();
-    const relevantProfiles = profiles.filter(p => p.links?.length > 0 && queryLower.includes(p.name.toLowerCase()));
-    console.log("[ragChat] Query:", question, "| Profiles with links matching:", relevantProfiles.map(p => p.name));
-    if (relevantProfiles.length > 0) {
-      const linkFetches = [];
-      for (const p of relevantProfiles) {
-        for (const link of p.links) {
-          if (link.url) {
-            console.log("[ragChat] Fetching link:", link.label, link.url);
-            linkFetches.push(
-              apiFetch("/api/profiles/fetch-link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: link.url }) })
-                .then(r => r.json())
-                .then(d => {
-                  console.log("[ragChat] Crawl result:", d.pages, "pages,", (d.text || "").length, "chars");
-                  return d.text ? `\n--- ${p.name}'s ${link.label || "link"} (${link.url}) ---\n${d.text}` : "";
-                })
-                .catch(err => { console.error("[ragChat] fetch-link error:", err); return ""; })
-            );
-          }
-        }
-      }
-      const linkTexts = (await Promise.all(linkFetches)).filter(Boolean);
-      console.log("[ragChat] Total link content pieces:", linkTexts.length);
-      if (linkTexts.length > 0) {
-        familyContext += `\nREFERENCE WEBSITES (use this information to answer questions about their school/organization):${linkTexts.join("\n")}\n`;
-      }
-    }
-  } catch (err) {
-    console.error("[ragChat] Error fetching link content:", err);
-  }
-
-  const systemPrompt = `You are a warm, loving family assistant helping grandparents explore their family's photos and documents. Talk like a kind family member sitting next to them — personal, gentle, and natural.
-
-STRICT RULES:
-- ALWAYS respond in natural, conversational language. NEVER return JSON, arrays, code, or structured data.
-- Use ONLY the information from the items below. Never make up details.
-- NEVER show IDs, reference numbers, UUIDs, file names, or any technical identifiers.
-- NEVER say you "can't display" or "can't show" photos. The photos will appear automatically below your message. Instead, describe what's in them warmly and naturally, as if you're looking at them together.
-- If photos are relevant, say things like "Here are some lovely photos..." or "Take a look at these..." — the app handles showing them.
-- When describing photos, paint a picture with words: who's there, what they're doing, the feeling of the moment.
-- Keep it short and warm — 2-3 paragraphs at most. No bullet points or lists.
-- If nothing matches the question, gently say so and suggest things they could ask about.
-- Never mention "vault," "manifests," "items," "database," or any system terminology.
-- You know about the family members listed below. Use this to personalize responses — mention their activities, schools, locations, or weather when relevant.
-- If REFERENCE WEBSITES content is provided below, USE that information to answer questions about schools, organizations, or activities. Summarize key details warmly and naturally.
-${familyContext}
-FAMILY MEMORIES:
-${itemContext || "(No matching memories found for this question.)"}`;
-
-  const msgs = [
-    ...history.slice(-6).map((m) => ({ role: m.role, content: m.content })),
-    { role: "user", content: question },
-  ];
-
-  const response = await claudeChat(msgs, systemPrompt);
-
-  // Safety: if the response looks like raw JSON (Pass 1 leak or model confusion), give a friendly fallback
-  const trimmed = response.trim();
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    try {
-      JSON.parse(trimmed);
-      // It's valid JSON — the model returned data instead of a natural response
-      if (selected.length > 0) {
-        const titles = selected.map(s => s.classification?.title).filter(Boolean).join(", ");
-        return { text: `Here are some memories I found: ${titles}. What would you like to know about them?`, sources: selected };
-      }
-      return { text: "I found some things but I'm having a little trouble putting it into words. Could you try asking again?", sources: selected };
-    } catch {
-      // Not valid JSON, just looks like it — proceed normally
-    }
-  }
-
-  return { text: response, sources: selected };
-}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function calcAge(birthday) {
@@ -961,21 +758,29 @@ const VaultCard = ({ item, onPhotoClick, onEdit, onTagFace }) => {
   );
 };
 
+// ── Suggestion Chips ────────────────────────────────────────────────────────
+const SUGGESTION_CHIPS = [
+  { label: "Catch me up", icon: "\u2615", message: "Catch me up on the family! What's everyone been up to lately?" },
+  { label: "On this day", icon: "\uD83D\uDCC5", message: "Show me any photos or memories from this day in previous years." },
+  { label: "Recent photos", icon: "\uD83D\uDCF8", message: "Show me the most recent family photos." },
+];
+
 // ── Chat View ────────────────────────────────────────────────────────────────
-const ChatView = ({ manifests, onPhotoClick }) => {
+const ChatView = ({ onPhotoClick }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState(null);
   const [weatherBar, setWeatherBar] = useState([]);
   const [weatherExpanded, setWeatherExpanded] = useState(null); // profileId or null
+  const [familyNames, setFamilyNames] = useState([]); // for dynamic "What's new with..." chips
   const scrollRef = useRef(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
   }, [messages, thinking]);
 
-  // Load weather for family members
+  // Load weather + family names for chips
   useEffect(() => {
     (async () => {
       try {
@@ -994,12 +799,14 @@ const ChatView = ({ manifests, onPhotoClick }) => {
           forecast: wMap[p.id].forecast || [],
         }));
         setWeatherBar(items);
+        setFamilyNames(profiles.map(p => p.name));
       } catch {}
     })();
   }, []);
 
-  const send = async () => {
-    const q = input.trim();
+  // Send a message (from input or suggestion chip)
+  const sendMessage = useCallback(async (text) => {
+    const q = text.trim();
     if (!q || thinking) return;
     setInput("");
     setError(null);
@@ -1009,8 +816,8 @@ const ChatView = ({ manifests, onPhotoClick }) => {
     setThinking(true);
 
     try {
-      const { text, sources } = await ragChat(q, manifests, messages);
-      setMessages((prev) => [...prev, { role: "assistant", content: text, sources }]);
+      const result = await agenticChat(q, messages);
+      setMessages((prev) => [...prev, { role: "assistant", content: result.text, sources: result.sources }]);
     } catch (err) {
       setError(err.message);
       setMessages((prev) => [
@@ -1024,7 +831,19 @@ const ChatView = ({ manifests, onPhotoClick }) => {
     } finally {
       setThinking(false);
     }
-  };
+  }, [thinking, messages]);
+
+  const send = () => sendMessage(input);
+
+  // Build full chip list: static chips + dynamic per-person chips
+  const allChips = [
+    ...SUGGESTION_CHIPS,
+    ...familyNames.map(name => ({
+      label: `What's new with ${name}?`,
+      icon: "\uD83D\uDC64",
+      message: `What's new with ${name}? How are they doing lately?`,
+    })),
+  ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -1074,7 +893,7 @@ const ChatView = ({ manifests, onPhotoClick }) => {
           flexDirection: "column",
         }}
       >
-        {messages.length === 0 && (
+        {messages.length === 0 && !thinking && (
           <div
             style={{
               flex: 1,
@@ -1082,7 +901,7 @@ const ChatView = ({ manifests, onPhotoClick }) => {
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              gap: 12,
+              gap: 16,
               color: C.muted,
               textAlign: "center",
               padding: 40,
@@ -1090,14 +909,40 @@ const ChatView = ({ manifests, onPhotoClick }) => {
           >
             <div style={{ fontSize: 48 }}>{"\u{1F46A}"}</div>
             <div style={{ fontSize: 22, fontWeight: 600, color: C.brown }}>
-              Hi there!
+              Your Family Storyteller
             </div>
-            <div style={{ fontSize: 17, maxWidth: 400, lineHeight: 1.6 }}>
-              Ask me anything about the family. I can show you photos, tell you
-              what everyone's been up to, and more.
+            <div style={{ fontSize: 17, maxWidth: 440, lineHeight: 1.6 }}>
+              I can catch you up on the family, find photos, check on the kids,
+              and share memories. What would you like to know?
             </div>
-            <div style={{ fontSize: 14, color: C.amberBorder, marginTop: 8 }}>
-              Try: "Show me recent photos" or "What's new with the family?"
+            {/* Suggestion chips */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 12, maxWidth: 500 }}>
+              {allChips.map((chip, i) => (
+                <button
+                  key={i}
+                  onClick={() => sendMessage(chip.message)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "10px 16px",
+                    borderRadius: 20,
+                    border: `1.5px solid ${C.amberBorder}`,
+                    background: C.white,
+                    color: C.brown,
+                    fontSize: 14,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                    fontFamily: "inherit",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = C.warm; e.currentTarget.style.borderColor = C.amber; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = C.white; e.currentTarget.style.borderColor = C.amberBorder; }}
+                >
+                  <span>{chip.icon}</span>
+                  <span>{chip.label}</span>
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -2643,7 +2488,7 @@ export default function FamilyHub() {
             Loading...
           </div>
         ) : tab === "chat" ? (
-          <ChatView manifests={manifests} onPhotoClick={openPhoto} />
+          <ChatView onPhotoClick={openPhoto} />
         ) : tab === "vault" ? (
           <div style={{ flex: 1, overflowY: "auto" }}>
             <VaultView manifests={manifests} onPhotoClick={openPhoto} onRefresh={async () => {
