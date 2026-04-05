@@ -449,6 +449,7 @@ async function execBrowseWebsite({ name, url }) {
     const r = await fetch(targetUrl, {
       signal: controller.signal,
       headers: { 'User-Agent': 'FamilyHub/1.0' },
+      redirect: 'error',
     });
     clearTimeout(timeout);
 
