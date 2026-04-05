@@ -37,13 +37,17 @@ const FaceScanPanel = ({ personName, onClose, onRefresh }) => {
   const acceptMatch = async (manifestId) => {
     setMatchStatus(prev => ({ ...prev, [manifestId]: "accepting" }));
     try {
-      // PATCH the manifest directly to add the person label
+      // PATCH the manifest directly — merge personName into existing people
       const manifest = results.matches.find(m => m.manifestId === manifestId);
       if (manifest) {
+        // Fetch current manifest to get existing corrections.people
+        const cur = await apiFetch(`/api/manifests/${manifestId}`);
+        const existing = cur.ok ? (await cur.json()).corrections?.people || [] : [];
+        const merged = [...new Set([...existing, personName])];
         await apiFetch(`/api/manifests/${manifestId}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ people: [personName] }),
+          body: JSON.stringify({ people: merged }),
         });
       }
       setMatchStatus(prev => ({ ...prev, [manifestId]: "accepted" }));
