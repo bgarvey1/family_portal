@@ -969,11 +969,37 @@ const ChatView = ({ manifests, onPhotoClick }) => {
   const [error, setError] = useState(null);
   const [weatherBar, setWeatherBar] = useState([]);
   const [weatherExpanded, setWeatherExpanded] = useState(null); // profileId or null
+  const [digestLoading, setDigestLoading] = useState(true);
+  const [digestFailed, setDigestFailed] = useState(false);
   const scrollRef = useRef(null);
+  const digestFetched = useRef(false);
 
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
   }, [messages, thinking]);
+
+  // Auto-load welcome digest on mount
+  useEffect(() => {
+    if (digestFetched.current) return;
+    digestFetched.current = true;
+    (async () => {
+      try {
+        const res = await apiFetch("/api/digest");
+        if (!res.ok) throw new Error(`Digest ${res.status}`);
+        const data = await res.json();
+        const sources = (data.sources || []).map(s => ({
+          ...s,
+          thumbUrl: thumbUrl(s),
+        }));
+        setMessages([{ role: "assistant", content: data.text, sources }]);
+      } catch (err) {
+        console.error("[digest] Failed to load:", err);
+        setDigestFailed(true);
+      } finally {
+        setDigestLoading(false);
+      }
+    })();
+  }, []);
 
   // Load weather for family members
   useEffect(() => {
@@ -1074,7 +1100,27 @@ const ChatView = ({ manifests, onPhotoClick }) => {
           flexDirection: "column",
         }}
       >
-        {messages.length === 0 && (
+        {digestLoading && messages.length === 0 && (
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 12,
+              color: C.muted,
+              textAlign: "center",
+              padding: 40,
+            }}
+          >
+            <div style={{ fontSize: 48 }}>{"\u{1F46A}"}</div>
+            <div style={{ fontSize: 18, color: C.brown, fontWeight: 500 }}>
+              Getting the latest on the family...
+            </div>
+          </div>
+        )}
+        {digestFailed && messages.length === 0 && (
           <div
             style={{
               flex: 1,

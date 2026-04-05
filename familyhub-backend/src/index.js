@@ -10,6 +10,7 @@ const uploadRoutes = require('./routes/upload');
 const setupRoutes = require('./routes/setup');
 const facesRoutes = require('./routes/faces');
 const profilesRoutes = require('./routes/profiles');
+const digestRoutes = require('./routes/digest');
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use('/api', uploadRoutes);
 app.use('/api', setupRoutes);
 app.use('/api', facesRoutes);
 app.use('/api', profilesRoutes);
+app.use('/api', digestRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
