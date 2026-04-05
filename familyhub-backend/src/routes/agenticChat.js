@@ -389,12 +389,18 @@ function isAllowedUrl(urlStr) {
     const parsed = new URL(urlStr);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
     const host = parsed.hostname.toLowerCase();
-    // Block internal/cloud metadata endpoints and private IPs
+    // Block internal/cloud metadata endpoints
     if (host === 'localhost' || host === 'metadata.google.internal') return false;
     if (host.endsWith('.internal') || host.endsWith('.local')) return false;
-    // Block private IP ranges
+    // Block IPv6 loopback and IPv4-mapped IPv6
+    if (host === '[::1]' || host.startsWith('[::ffff:')) return false;
+    if (host.includes(':')) return false; // Block all IPv6 bracket notation
+    // Block 0.0.0.0 (maps to local machine)
+    if (host === '0.0.0.0') return false;
+    // Block private IPv4 ranges
     const parts = host.split('.').map(Number);
     if (parts.length === 4 && parts.every(n => !isNaN(n))) {
+      if (parts[0] === 0) return false;   // 0.x.x.x
       if (parts[0] === 10) return false;
       if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return false;
       if (parts[0] === 192 && parts[1] === 168) return false;
