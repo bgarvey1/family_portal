@@ -70,7 +70,7 @@ const VaultView = ({ manifests, onPhotoClick, onRefresh }) => {
     if (category !== "all" && cl.category !== category) return false;
     if (search) {
       const q = search.toLowerCase();
-      const haystack = [cl.title, cl.description, m.fileName, ...(cl.tags || []), ...(cl.people || [])]
+      const haystack = [cl.title, cl.description, m.fileName, ...(cl.tags || []), ...(cl.people || []), ...(m.corrections?.people || []), ...(m.corrections?.tags || []), m.corrections?.location || ""]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();

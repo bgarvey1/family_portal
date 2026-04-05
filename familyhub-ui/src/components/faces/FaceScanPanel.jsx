@@ -37,13 +37,7 @@ const FaceScanPanel = ({ personName, onClose, onRefresh }) => {
   const acceptMatch = async (manifestId) => {
     setMatchStatus(prev => ({ ...prev, [manifestId]: "accepting" }));
     try {
-      // Apply the label by running scan with apply=true for just this manifest
-      const r = await apiFetch("/api/faces/scan", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ personName, apply: true }),
-      });
-      // Simpler: just PATCH the manifest directly
+      // PATCH the manifest directly to add the person label
       const manifest = results.matches.find(m => m.manifestId === manifestId);
       if (manifest) {
         await apiFetch(`/api/manifests/${manifestId}`, {
