@@ -1,7 +1,7 @@
 // ── Helpers ─────────────────────────────────────────────────────────────────
 export function calcAge(birthday) {
   if (!birthday) return null;
-  const d = new Date(birthday);
+  const d = new Date(birthday + "T00:00:00");
   if (isNaN(d)) return null;
   const now = new Date();
   let age = now.getFullYear() - d.getFullYear();

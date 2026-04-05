@@ -25,10 +25,10 @@ const EditPanel = ({ item, onSave, onReclassify, onClose }) => {
     setStatus(null);
     try {
       const body = {};
-      if (people.trim()) body.people = people.split(",").map((s) => s.trim()).filter(Boolean);
-      if (location.trim()) body.location = location.trim();
-      if (context.trim()) body.context = context.trim();
-      if (tags.trim()) body.tags = tags.split(",").map((s) => s.trim()).filter(Boolean);
+      body.people = people.trim() ? people.split(",").map((s) => s.trim()).filter(Boolean) : [];
+      body.location = location.trim() || "";
+      body.context = context.trim() || "";
+      body.tags = tags.trim() ? tags.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
       const r = await apiFetch(`/api/manifests/${item.id}`, {
         method: "PATCH",
