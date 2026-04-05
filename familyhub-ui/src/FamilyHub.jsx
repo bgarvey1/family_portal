@@ -766,7 +766,7 @@ const SUGGESTION_CHIPS = [
 ];
 
 // ── Chat View ────────────────────────────────────────────────────────────────
-const ChatView = ({ manifests, onPhotoClick }) => {
+const ChatView = ({ onPhotoClick }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -936,8 +936,8 @@ const ChatView = ({ manifests, onPhotoClick }) => {
                     transition: "all 0.15s",
                     fontFamily: "inherit",
                   }}
-                  onMouseEnter={(e) => { e.target.style.background = C.warm; e.target.style.borderColor = C.amber; }}
-                  onMouseLeave={(e) => { e.target.style.background = C.white; e.target.style.borderColor = C.amberBorder; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = C.warm; e.currentTarget.style.borderColor = C.amber; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = C.white; e.currentTarget.style.borderColor = C.amberBorder; }}
                 >
                   <span>{chip.icon}</span>
                   <span>{chip.label}</span>
@@ -2488,7 +2488,7 @@ export default function FamilyHub() {
             Loading...
           </div>
         ) : tab === "chat" ? (
-          <ChatView manifests={manifests} onPhotoClick={openPhoto} />
+          <ChatView onPhotoClick={openPhoto} />
         ) : tab === "vault" ? (
           <div style={{ flex: 1, overflowY: "auto" }}>
             <VaultView manifests={manifests} onPhotoClick={openPhoto} onRefresh={async () => {
