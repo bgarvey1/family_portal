@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C } from "../lib/palette";
-import { apiFetch, BACKEND_URL, BACKEND_KEY } from "../lib/api";
+import { apiFetch, BACKEND_URL } from "../lib/api";
 import { calcAge } from "../lib/constants";
 import { Badge } from "./Badge";
 
@@ -247,7 +247,7 @@ export const SettingsView = ({ syncStatus, onSync, syncing, syncResult, online, 
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {refs.map(ref => (
                 <div key={ref.id} style={{ position: "relative" }}>
-                  <img src={`${BACKEND_URL}/api/faces/${ref.id}/image?key=${BACKEND_KEY}`} alt={name}
+                  <img src={`${BACKEND_URL}/api/faces/${ref.id}/image`} alt={name}
                     style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", border: `2px solid ${C.amberBorder}` }} />
                   <button onClick={() => deleteFace(ref.id)}
                     style={{ position: "absolute", top: -4, right: -4, width: 18, height: 18, borderRadius: "50%", border: "none", background: C.red, color: "#fff", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>x</button>

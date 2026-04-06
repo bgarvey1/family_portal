@@ -1,30 +1,31 @@
 // ── Configuration ────────────────────────────────────────────────────────────
-const CLOUD_BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://familyhub-backend-761807984124.us-east1.run.app";
-export const BACKEND_KEY = import.meta.env.VITE_BACKEND_KEY || "";
-export const BACKEND_URL = CLOUD_BACKEND_URL;
+// In local dev, Vite proxies /api/* to localhost:8080 (the local backend).
+// The local backend reads the API key from its own .env — never exposed to the browser.
+// BACKEND_URL is empty string so fetch("/api/...") goes through the Vite proxy.
+export const BACKEND_URL = "";
 
 // ── API helpers ──────────────────────────────────────────────────────────────
 export const apiFetch = (path, opts = {}) =>
   fetch(`${BACKEND_URL}${path}`, {
     ...opts,
-    headers: { "x-api-key": BACKEND_KEY, ...opts.headers },
+    headers: { ...opts.headers },
   });
 
-// Build a proxied thumbnail URL
+// Build a proxied thumbnail URL (goes through Vite proxy, no key needed)
 export const thumbUrl = (item) => {
   if (!item) return null;
   if (item.source === "upload") {
-    return `${BACKEND_URL}/api/uploads/${item.id}/image?key=${BACKEND_KEY}`;
+    return `${BACKEND_URL}/api/uploads/${item.id}/image`;
   }
   if (item.driveFileId) {
-    return `${BACKEND_URL}/api/files/${item.driveFileId}/thumbnail?key=${BACKEND_KEY}`;
+    return `${BACKEND_URL}/api/files/${item.driveFileId}/thumbnail`;
   }
   return null;
 };
 
 export const driveThumbUrl = (driveFileId) =>
   driveFileId
-    ? `${BACKEND_URL}/api/files/${driveFileId}/thumbnail?key=${BACKEND_KEY}`
+    ? `${BACKEND_URL}/api/files/${driveFileId}/thumbnail`
     : null;
 
 // ── Agentic Chat ────────────────────────────────────────────────────────────

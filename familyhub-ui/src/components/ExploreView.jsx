@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { C } from "../lib/palette";
 import { CATEGORIES } from "../lib/constants";
-import { apiFetch, BACKEND_URL, BACKEND_KEY } from "../lib/api";
+import { apiFetch, BACKEND_URL } from "../lib/api";
 import { ClusterCard } from "./ClusterCard";
 import { ClusterDetail } from "./ClusterDetail";
 import { VaultCard } from "./VaultCard";
@@ -33,7 +33,6 @@ export const ExploreView = ({ clusters, manifests, unreviewedCount, onPhotoClick
         formData.append("contributor", "Family");
         const r = await fetch(`${BACKEND_URL}/api/upload`, {
           method: "POST",
-          headers: { "x-api-key": BACKEND_KEY },
           body: formData,
         });
         if (!r.ok) {
