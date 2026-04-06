@@ -11,6 +11,28 @@ const router = Router();
 const storage = new Storage();
 const anthropic = new Anthropic({ apiKey: config.anthropicApiKey });
 
+// GET /api/manifests/unreviewed — get unreviewed manifests (must be before /:id routes)
+router.get('/manifests/unreviewed', requireApiKey, async (req, res) => {
+  try {
+    const manifests = await firestoreService.getUnreviewedManifests();
+    res.json({ manifests, count: manifests.length });
+  } catch (err) {
+    console.error('Error fetching unreviewed manifests:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/manifests/review-all — mark all unreviewed as reviewed
+router.post('/manifests/review-all', requireApiKey, async (req, res) => {
+  try {
+    const count = await firestoreService.markAllReviewed();
+    res.json({ message: `Marked ${count} items as reviewed`, count });
+  } catch (err) {
+    console.error('Error marking all reviewed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/manifests — list manifests (supports pagination)
 // Query params: ?limit=50&cursor=<lastId> for paginated results
 // Omit params to get all manifests (backwards compatible)
@@ -102,6 +124,21 @@ router.patch('/manifests/:id', requireApiKey, async (req, res) => {
     });
   } catch (err) {
     console.error('Error updating manifest:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/manifests/:id/review — mark a single manifest as reviewed
+router.post('/manifests/:id/review', requireApiKey, async (req, res) => {
+  try {
+    const manifest = await firestoreService.getManifest(req.params.id);
+    if (!manifest) {
+      return res.status(404).json({ error: 'Manifest not found' });
+    }
+    await firestoreService.markManifestReviewed(req.params.id);
+    res.json({ message: 'Marked as reviewed', id: req.params.id });
+  } catch (err) {
+    console.error('Error marking reviewed:', err);
     res.status(500).json({ error: err.message });
   }
 });

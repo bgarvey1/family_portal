@@ -11,6 +11,7 @@ const setupRoutes = require('./routes/setup');
 const facesRoutes = require('./routes/faces');
 const profilesRoutes = require('./routes/profiles');
 const agenticChatRoutes = require('./routes/agenticChat');
+const clusterRoutes = require('./routes/clusters');
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/api', setupRoutes);
 app.use('/api', facesRoutes);
 app.use('/api', profilesRoutes);
 app.use('/api', agenticChatRoutes);
+app.use('/api', clusterRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
