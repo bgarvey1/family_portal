@@ -97,6 +97,7 @@ async function runSync() {
           exif: exif || null,
           classification,
           corrections: null,
+          reviewed: false,
           createdAt: new Date().toISOString(),
         };
 
@@ -111,6 +112,18 @@ async function runSync() {
 
     await firestoreService.updateSyncCursor({ lastFileCount: allFiles.length });
     console.log(`Sync complete: ${result.processed} processed, ${result.skipped} skipped, ${result.errors.length} errors`);
+
+    // Regenerate clusters if new files were processed
+    if (result.processed > 0) {
+      try {
+        const clusterService = require('./clusters');
+        console.log('Regenerating clusters after sync...');
+        const clusterResult = await clusterService.generateClusters();
+        console.log(`Cluster generation complete: ${clusterResult.count} clusters created`);
+      } catch (clusterErr) {
+        console.error('Cluster generation failed (non-fatal):', clusterErr.message);
+      }
+    }
   } catch (err) {
     console.error('Sync failed:', err);
     result.errors.push({ file: 'SYNC_GLOBAL', error: err.message });

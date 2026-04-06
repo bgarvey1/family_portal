@@ -13,6 +13,7 @@ const KNOWLEDGE_COLLECTION = 'vault_knowledge';
 const FACES_COLLECTION = 'vault_faces';
 const DELETED_COLLECTION = 'vault_deleted';
 const PROFILES_COLLECTION = 'vault_profiles';
+const CLUSTERS_COLLECTION = 'vault_clusters';
 const SYNC_CONFIG_DOC = 'sync_config';
 
 async function getSyncCursor() {
@@ -182,6 +183,68 @@ async function deleteProfile(id) {
   await db.collection(PROFILES_COLLECTION).doc(id).delete();
 }
 
+// ── Clusters ──────────────────────────────────────────────────────────────
+async function writeCluster(cluster) {
+  await db.collection(CLUSTERS_COLLECTION).doc(cluster.id).set(cluster);
+}
+
+async function getAllClusters() {
+  const snapshot = await db.collection(CLUSTERS_COLLECTION)
+    .orderBy('updatedAt', 'desc')
+    .get();
+  return snapshot.docs.map(doc => doc.data());
+}
+
+async function getCluster(id) {
+  const doc = await db.collection(CLUSTERS_COLLECTION).doc(id).get();
+  return doc.exists ? doc.data() : null;
+}
+
+async function updateCluster(id, updates) {
+  await db.collection(CLUSTERS_COLLECTION).doc(id).set(updates, { merge: true });
+}
+
+async function deleteCluster(id) {
+  await db.collection(CLUSTERS_COLLECTION).doc(id).delete();
+}
+
+async function deleteAllClusters() {
+  const snapshot = await db.collection(CLUSTERS_COLLECTION).get();
+  const batch = db.batch();
+  snapshot.docs.forEach(doc => batch.delete(doc.ref));
+  if (snapshot.docs.length > 0) {
+    await batch.commit();
+  }
+}
+
+// ── Review Status ─────────────────────────────────────────────────────────
+async function getUnreviewedManifests() {
+  const snapshot = await db.collection(MANIFESTS_COLLECTION)
+    .where('reviewed', '==', false)
+    .orderBy('createdAt', 'desc')
+    .get();
+  return snapshot.docs.map(doc => doc.data());
+}
+
+async function markManifestReviewed(id) {
+  await db.collection(MANIFESTS_COLLECTION).doc(id).set(
+    { reviewed: true },
+    { merge: true }
+  );
+}
+
+async function markAllReviewed() {
+  const unreviewed = await getUnreviewedManifests();
+  const batch = db.batch();
+  for (const m of unreviewed) {
+    batch.update(db.collection(MANIFESTS_COLLECTION).doc(m.id), { reviewed: true });
+  }
+  if (unreviewed.length > 0) {
+    await batch.commit();
+  }
+  return unreviewed.length;
+}
+
 module.exports = {
   getSyncCursor,
   updateSyncCursor,
@@ -207,4 +270,13 @@ module.exports = {
   getAllProfiles,
   updateProfile,
   deleteProfile,
+  writeCluster,
+  getAllClusters,
+  getCluster,
+  updateCluster,
+  deleteCluster,
+  deleteAllClusters,
+  getUnreviewedManifests,
+  markManifestReviewed,
+  markAllReviewed,
 };
